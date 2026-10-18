@@ -137,6 +137,26 @@
   }
   function observePerformance() {
     if (!('PerformanceObserver' in window)) return;
+    var lcpValue = null;
+    var clsValue = 0;
+    var clsSessionValue = 0;
+    var clsSessionStart = 0;
+    var clsLastShift = 0;
+    var interactions = Object.create(null);
+    var finalized = false;
+    var observers = [];
+    function finalize() {
+      if (finalized) return;
+      finalized = true;
+      if (lcpValue !== null) reportMetric('lcp_ms', lcpValue);
+      reportMetric('cls', clsValue);
+      var durations = Object.keys(interactions).map(function (key) { return interactions[key]; }).sort(function (a, b) { return a - b; });
+      if (durations.length) {
+        // This is a lightweight per-page interaction-latency estimate, not Google's full INP algorithm.
+        reportMetric('interaction_latency_estimate_ms', durations[Math.max(0, Math.ceil(durations.length * 0.98) - 1)]);
+      }
+      observers.forEach(function (observer) { try { observer.disconnect(); } catch (e) {} });
+    }
     try {
       var nav = performance.getEntriesByType && performance.getEntriesByType('navigation')[0];
       if (nav) reportMetric('ttfb_ms', nav.responseStart - nav.startTime);
@@ -144,18 +164,12 @@
     try {
       var lcpObserver = new PerformanceObserver(function (list) {
         var entries = list.getEntries();
-        if (entries.length) reportMetric('lcp_ms', entries[entries.length - 1].startTime);
+        if (entries.length) lcpValue = entries[entries.length - 1].startTime;
       });
       lcpObserver.observe({ type: 'largest-contentful-paint', buffered: true });
-      document.addEventListener('visibilitychange', function () {
-        if (document.visibilityState === 'hidden') lcpObserver.disconnect();
-      }, { once: true });
+      observers.push(lcpObserver);
     } catch (e) { /* LCP is not supported in every browser. */ }
     try {
-      var clsValue = 0;
-      var clsSessionValue = 0;
-      var clsSessionStart = 0;
-      var clsLastShift = 0;
       var clsObserver = new PerformanceObserver(function (list) {
         list.getEntries().forEach(function (entry) {
           if (entry.hadRecentInput) return;
@@ -169,25 +183,24 @@
           clsLastShift = entry.startTime;
           clsValue = Math.max(clsValue, clsSessionValue);
         });
-        reportMetric('cls', clsValue);
       });
       clsObserver.observe({ type: 'layout-shift', buffered: true });
+      observers.push(clsObserver);
     } catch (e) { /* CLS is not supported in every browser. */ }
     try {
-      var interactions = Object.create(null);
       var interactionObserver = new PerformanceObserver(function (list) {
         list.getEntries().forEach(function (entry) {
           if (!entry.interactionId) return;
           interactions[entry.interactionId] = Math.max(interactions[entry.interactionId] || 0, entry.duration || 0);
         });
-        var durations = Object.keys(interactions).map(function (key) { return interactions[key]; }).sort(function (a, b) { return a - b; });
-        if (durations.length) {
-          // This is a lightweight per-page interaction-latency estimate, not Google's full INP algorithm.
-          reportMetric('interaction_latency_estimate_ms', durations[Math.max(0, Math.ceil(durations.length * 0.98) - 1)]);
-        }
       });
       interactionObserver.observe({ type: 'event', buffered: true, durationThreshold: 40 });
+      observers.push(interactionObserver);
     } catch (e) { /* Event Timing is not supported in every browser. */ }
+    document.addEventListener('visibilitychange', function () {
+      if (document.visibilityState === 'hidden') finalize();
+    });
+    window.addEventListener('pagehide', finalize, { once: true });
   }
   function start() {
     if (started || denied) return;
@@ -230,11 +243,10 @@
       var form = event.target;
       if (!form || !form.matches) return;
       if (form.matches('form.search-form,form.woocommerce-product-search,form[role="search"]')) {
-        var input = form.querySelector('input[type="search"],input[name="s"]');
-        if (input && input.value) send('search', { term: String(input.value).trim().slice(0, 120) });
-      } else {
-        send('form_submit', { form_type: form.classList.contains('checkout') ? 'checkout' : 'form' });
+        // The resulting search page records the search once, including empty-result searches.
+        return;
       }
+      send('form_submit', { form_type: form.classList.contains('checkout') ? 'checkout' : 'form' });
     }, true);
 
     window.addEventListener('error', function (event) {
