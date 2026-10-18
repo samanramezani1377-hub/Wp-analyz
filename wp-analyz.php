@@ -69,7 +69,7 @@ add_action('rest_api_init',function(){register_rest_route('wp-analyz/v1','/event
 add_action('wp_enqueue_scripts',function(){
  $s=wpa_settings();if(empty($s['enabled'])||is_admin()||(!empty($s['exclude_admins'])&&current_user_can('manage_options')))return;
  wp_enqueue_script('wp-analyz-tracker',plugins_url('assets/js/tracker.js',__FILE__),array(),WPA_VERSION,array('in_footer'=>true,'strategy'=>'defer'));
- $cfg=array('endpoint'=>esc_url_raw(rest_url('wp-analyz/v1/event')),'requireConsent'=>!empty($s['require_consent']),'persistentVisitor'=>!empty($s['persistent_visitor']),'productId'=>function_exists('is_product')&&is_product()?(int)get_queried_object_id():0,'categoryId'=>function_exists('is_product_category')&&is_product_category()?(int)get_queried_object_id():0,'searchTerm'=>is_search()?sanitize_text_field(get_search_query(false)):'');wp_add_inline_script('wp-analyz-tracker','window.WPAnalyzConfig='.wp_json_encode($cfg).';','before');
+ $cfg=array('endpoint'=>esc_url_raw(rest_url('wp-analyz/v1/event')),'requireConsent'=>!empty($s['require_consent']),'persistentVisitor'=>!empty($s['persistent_visitor']),'productId'=>function_exists('is_product')&&is_product()?(int)get_queried_object_id():0,'categoryId'=>function_exists('is_product_category')&&is_product_category()?(int)get_queried_object_id():0,'searchTerm'=>is_search()?sanitize_text_field(get_search_query(false)):'');wp_add_inline_script('wp-analyz-tracker','window.WPAnalyzConfig='.wp_json_encode($cfg, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT).';','before');
 },30);
 function wpa_capture_order_analytics_context($order, $save = false) {
  if (!is_object($order) || !method_exists($order, 'update_meta_data')) return;
@@ -183,16 +183,69 @@ add_action('admin_post_wpa_save_settings',function(){if(!current_user_can('manag
 add_action('admin_post_wpa_export_csv',function(){if(!current_user_can('manage_options'))wp_die('Forbidden',403);check_admin_referer('wpa_export_csv');global $wpdb;$days=isset($_GET['days'])&&in_array(absint($_GET['days']),array(7,30,90),true)?absint($_GET['days']):7;$since=gmdate('Y-m-d H:i:s',time()-DAY_IN_SECONDS*$days);$rows=$wpdb->get_results($wpdb->prepare('SELECT created_at,event_name,url_path,referrer_host,page_title,device_type,browser_family,object_id,value_decimal,currency FROM '.wpa_table().' WHERE created_at >= %s ORDER BY created_at DESC LIMIT 50000',$since),ARRAY_A);nocache_headers();header('Content-Type: text/csv; charset=utf-8');header('Content-Disposition: attachment; filename=wp-analyz-'.gmdate('Y-m-d').'.csv');$f=fopen('php://output','w');fwrite($f,"\xEF\xBB\xBF");fputcsv($f,array('created_at_utc','event','path','referrer_host','page_title','device','browser','object_id','value','currency'));foreach($rows as $r)fputcsv($f,array_map('wpa_csv_safe',array_values($r)));fclose($f);exit;});
 add_action('admin_init',function(){if(function_exists('wp_add_privacy_policy_content'))wp_add_privacy_policy_content('WP Analyz','<p>WP Analyz stores analytics events such as page views, sessions, device type and some WooCommerce events in this site database. It does not store full IP addresses in its events table. By default, browser IDs last for the current browser session. After consent, first-party session cookies may be used to link an order to its analytics session. If enabled, a persistent browser ID is stored in localStorage. The plugin requires consent by default but does not display a consent banner; connect your consent-management tool. Search terms can contain personal information. Configure retention and your privacy notice appropriately.</p>');});
 add_filter('wp_privacy_personal_data_exporters', function($exporters) {
- $exporters['wp-analyz'] = array('exporter_friendly_name'=>'WP Analyz Analytics','callback'=>function($email) {
-  $u=get_user_by('email',$email);if(!$u)return array('data'=>array(),'done'=>true);global $wpdb;
-  $rows=$wpdb->get_results($wpdb->prepare('SELECT id,created_at,event_name,url_path,referrer_host,device_type FROM '.wpa_table().' WHERE user_id=%d ORDER BY created_at DESC LIMIT 5000',$u->ID),ARRAY_A);$data=array();
-  foreach($rows as $r)$data[]=array('group_id'=>'wp-analyz','group_label'=>'WP Analyz Analytics','item_id'=>'wpa-'.$r['id'],'data'=>array(array('name'=>'Date UTC','value'=>$r['created_at']),array('name'=>'Event','value'=>$r['event_name']),array('name'=>'Page path','value'=>$r['url_path']),array('name'=>'Referrer host','value'=>$r['referrer_host']),array('name'=>'Device','value'=>$r['device_type'])));
-  return array('data'=>$data,'done'=>true);
- });return $exporters;
+ $exporters['wp-analyz'] = array(
+  'exporter_friendly_name' => 'WP Analyz Analytics',
+  'callback' => function($email, $page = 1) {
+   $user = get_user_by('email', $email);
+   if (!$user) return array('data' => array(), 'done' => true);
+   global $wpdb;
+   $page = max(1, (int) $page); $limit = 500; $offset = ($page - 1) * $limit;
+   $rows = $wpdb->get_results($wpdb->prepare('SELECT id,created_at,event_name,url_path,referrer_host,device_type FROM '.wpa_table().' WHERE user_id=%d ORDER BY created_at DESC LIMIT %d OFFSET %d', $user->ID, $limit, $offset), ARRAY_A);
+   $data = array();
+   foreach ($rows as $row) {
+    $data[] = array('group_id'=>'wp-analyz','group_label'=>'WP Analyz Analytics','item_id'=>'wpa-'.$row['id'],'data'=>array(
+     array('name'=>'Date UTC','value'=>$row['created_at']), array('name'=>'Event','value'=>$row['event_name']),
+     array('name'=>'Page path','value'=>$row['url_path']), array('name'=>'Referrer host','value'=>$row['referrer_host']),
+     array('name'=>'Device','value'=>$row['device_type'])
+    ));
+   }
+   $events_done = count($rows) < $limit;
+   $orders_done = true;
+   if (function_exists('wc_get_orders')) {
+    $orders_page = wc_get_orders(array('customer_id'=>(int)$user->ID,'limit'=>$limit,'page'=>$page,'paginate'=>true,'return'=>'objects'));
+    $orders = is_object($orders_page) && isset($orders_page->orders) ? $orders_page->orders : array();
+    $max_pages = is_object($orders_page) && isset($orders_page->max_num_pages) ? max(1,(int)$orders_page->max_num_pages) : 1;
+    $orders_done = $page >= $max_pages;
+    foreach ($orders as $order) {
+     $consent = (string) $order->get_meta('_wpa_analytics_consent', true);
+     if ('' === $consent) continue;
+     $data[] = array('group_id'=>'wp-analyz','group_label'=>'WP Analyz Analytics','item_id'=>'wpa-order-'.$order->get_id(),'data'=>array(
+      array('name'=>'WooCommerce order ID','value'=>(string)$order->get_id()),
+      array('name'=>'Analytics consent state','value'=>$consent),
+      array('name'=>'Visitor ID','value'=>(string)$order->get_meta('_wpa_visitor_id', true)),
+      array('name'=>'Session ID','value'=>(string)$order->get_meta('_wpa_session_id', true))
+     ));
+    }
+   }
+   return array('data'=>$data,'done'=>$events_done && $orders_done);
+  }
+ );
+ return $exporters;
 });
 add_filter('wp_privacy_personal_data_erasers', function($erasers) {
- $erasers['wp-analyz'] = array('eraser_friendly_name'=>'WP Analyz Analytics','callback'=>function($email) {
-  $u=get_user_by('email',$email);if(!$u)return array('items_removed'=>false,'items_retained'=>false,'messages'=>array(),'done'=>true);global $wpdb;
-  $n=$wpdb->delete(wpa_table(),array('user_id'=>(int)$u->ID),array('%d'));return array('items_removed'=>(bool)$n,'items_retained'=>false,'messages'=>array(),'done'=>true);
- });return $erasers;
+ $erasers['wp-analyz'] = array(
+  'eraser_friendly_name' => 'WP Analyz Analytics',
+  'callback' => function($email, $page = 1) {
+   $user = get_user_by('email', $email);
+   if (!$user) return array('items_removed'=>false,'items_retained'=>false,'messages'=>array(),'done'=>true);
+   global $wpdb;
+   $removed = (bool) $wpdb->delete(wpa_table(), array('user_id'=>(int)$user->ID), array('%d'));
+   $done = true;
+   if (function_exists('wc_get_orders')) {
+    $page = max(1, (int) $page); $limit = 100;
+    $orders_page = wc_get_orders(array('customer_id'=>(int)$user->ID,'limit'=>$limit,'page'=>$page,'paginate'=>true,'return'=>'objects'));
+    $orders = is_object($orders_page) && isset($orders_page->orders) ? $orders_page->orders : array();
+    $max_pages = is_object($orders_page) && isset($orders_page->max_num_pages) ? max(1,(int)$orders_page->max_num_pages) : 1;
+    foreach ($orders as $order) {
+     foreach (array('_wpa_analytics_consent','_wpa_visitor_id','_wpa_session_id') as $meta_key) {
+      if ('' !== (string) $order->get_meta($meta_key, true)) { $order->delete_meta_data($meta_key); $removed = true; }
+     }
+     if (method_exists($order, 'save')) $order->save();
+    }
+    $done = $page >= $max_pages;
+   }
+   return array('items_removed'=>$removed,'items_retained'=>false,'messages'=>array(),'done'=>$done);
+  }
+ );
+ return $erasers;
 });
