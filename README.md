@@ -4,10 +4,10 @@ A self-hosted WordPress and WooCommerce analytics plugin. Event data is stored i
 
 ## Features
 
-- Lightweight deferred first-party tracker for page views, product/category views, search, scroll depth, outbound clicks, add/remove-to-cart clicks, checkout-button clicks, basic form events, and navigation timing.
-- Admin dashboard for visitors, sessions, page views, events, purchases, revenue, popular pages, referrer hosts, devices, and daily summaries.
-- WooCommerce server-side purchase events for paid orders, with deterministic event IDs to prevent duplicate purchase counts. They are suppressed while the consent gate is enabled because server-side consent cannot be reliably inferred from a browser session.
-- Consent gate enabled by default, session-only browser identifiers by default, optional persistent visitor IDs, configurable retention, CSV export, and WordPress personal-data exporter/eraser hooks.
+- Lightweight deferred first-party tracker for page views, product/category views, search, scroll depth, outbound clicks, add/remove-to-cart clicks, checkout-button clicks, basic form events, and navigation timing, LCP/CLS and a clearly labeled interaction-latency estimate, LCP/CLS and a clearly labeled interaction-latency estimate.
+- Admin dashboard for visitors, sessions, page views, events, purchases, revenue, popular pages, referrer hosts, devices, UTM campaigns, search terms, performance metric summaries, and daily summaries.
+- WooCommerce server-side purchase events for paid orders, with deterministic event IDs to prevent duplicate purchase counts. After consent, first-party session cookies let classic and Store API checkout flows associate paid orders with the browser session where supported.
+- Consent gate enabled by default, session-only browser identifiers by default, optional persistent visitor IDs, configurable retention, CSV export with spreadsheet-formula mitigation, and WordPress personal-data exporter/eraser hooks.
 - Full IP addresses are not stored in the analytics events table; no third-party analytics network calls are made.
 
 ## Installation
