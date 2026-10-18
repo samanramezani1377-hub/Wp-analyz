@@ -18,7 +18,29 @@ function wpa_settings(){ return wp_parse_args(get_option('wpa_settings',array())
 function wpa_activate(){
  global $wpdb; require_once ABSPATH.'wp-admin/includes/upgrade.php'; $table=wpa_table(); $charset=$wpdb->get_charset_collate();
  $sql="CREATE TABLE {$table} (
- id bigint(20) unsigned NOT NULL AUTO_INCREMENT,event_id char(36) NOT NULL,visitor_id char(36) NOT NULL,session_id char(36) NOT NULL,event_name varchar(40) NOT NULL,url_path varchar(512) NOT NULL DEFAULT '/',referrer_host varchar(190) NOT NULL DEFAULT '',page_title varchar(255) NOT NULL DEFAULT '',device_type varchar(20) NOT NULL DEFAULT 'unknown',browser_family varchar(40) NOT NULL DEFAULT 'unknown',user_id bigint(20) unsigned NOT NULL DEFAULT 0,object_id bigint(20) unsigned NOT NULL DEFAULT 0,value_decimal decimal(12,2) NOT NULL DEFAULT 0.00,currency char(3) NOT NULL DEFAULT '',event_data longtext NULL,created_at datetime NOT NULL,PRIMARY KEY  (id),UNIQUE KEY event_id (event_id),KEY created_at (created_at),KEY event_name_created (event_name,created_at),KEY visitor_created (visitor_id,created_at),KEY session_created (session_id,created_at),KEY object_created (object_id,created_at)
+ id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+ event_id char(36) NOT NULL,
+ visitor_id char(36) NOT NULL,
+ session_id char(36) NOT NULL,
+ event_name varchar(40) NOT NULL,
+ url_path varchar(512) NOT NULL DEFAULT '/',
+ referrer_host varchar(190) NOT NULL DEFAULT '',
+ page_title varchar(255) NOT NULL DEFAULT '',
+ device_type varchar(20) NOT NULL DEFAULT 'unknown',
+ browser_family varchar(40) NOT NULL DEFAULT 'unknown',
+ user_id bigint(20) unsigned NOT NULL DEFAULT 0,
+ object_id bigint(20) unsigned NOT NULL DEFAULT 0,
+ value_decimal decimal(12,2) NOT NULL DEFAULT 0.00,
+ currency char(3) NOT NULL DEFAULT '',
+ event_data longtext NULL,
+ created_at datetime NOT NULL,
+ PRIMARY KEY  (id),
+ UNIQUE KEY event_id (event_id),
+ KEY created_at (created_at),
+ KEY event_name_created (event_name,created_at),
+ KEY visitor_created (visitor_id,created_at),
+ KEY session_created (session_id,created_at),
+ KEY object_created (object_id,created_at)
  ) {$charset};";
  dbDelta($sql); if(!get_option('wpa_settings')) add_option('wpa_settings',wpa_defaults(),'','no'); update_option('wpa_db_version','1',false);
  if(!wp_next_scheduled('wpa_daily_cleanup')) wp_schedule_event(time()+HOUR_IN_SECONDS,'daily','wpa_daily_cleanup');
@@ -49,7 +71,7 @@ add_action('wp_enqueue_scripts',function(){
  wp_enqueue_script('wp-analyz-tracker',plugins_url('assets/js/tracker.js',__FILE__),array(),WPA_VERSION,array('in_footer'=>true,'strategy'=>'defer'));
  $cfg=array('endpoint'=>esc_url_raw(rest_url('wp-analyz/v1/event')),'requireConsent'=>!empty($s['require_consent']),'persistentVisitor'=>!empty($s['persistent_visitor']),'productId'=>function_exists('is_product')&&is_product()?(int)get_queried_object_id():0,'categoryId'=>function_exists('is_product_category')&&is_product_category()?(int)get_queried_object_id():0,'searchTerm'=>is_search()?sanitize_text_field(get_search_query(false)):'');wp_add_inline_script('wp-analyz-tracker','window.WPAnalyzConfig='.wp_json_encode($cfg).';','before');
 },30);
-function wpa_record_purchase($order_id){if(!function_exists('wc_get_order'))return;$o=wc_get_order($order_id);if(!$o||!$o->is_paid())return;$seed=(int)$order_id;wpa_insert_event(array('event_id'=>wpa_stable_uuid('purchase:'.$seed),'visitor_id'=>wpa_stable_uuid('purchase-visitor:'.$seed),'session_id'=>wpa_stable_uuid('purchase-session:'.$seed),'event_name'=>'purchase','url_path'=>'/checkout/order-received/','referrer_host'=>'','page_title'=>'Purchase','device_type'=>'unknown','browser_family'=>'unknown','user_id'=>(int)$o->get_customer_id(),'object_id'=>$seed,'value_decimal'=>(float)$o->get_total(),'currency'=>substr(sanitize_text_field($o->get_currency()),0,3),'event_data'=>wp_json_encode(array('order_id'=>(string)$seed,'items_count'=>(string)$o->get_item_count(),'source'=>'woocommerce_server')),'created_at'=>current_time('mysql',true)));}
+function wpa_record_purchase($order_id){if(empty(wpa_settings()['woocommerce'])||!function_exists('wc_get_order'))return;$o=wc_get_order($order_id);if(!$o||!$o->is_paid())return;$seed=(int)$order_id;wpa_insert_event(array('event_id'=>wpa_stable_uuid('purchase:'.$seed),'visitor_id'=>wpa_stable_uuid('purchase-visitor:'.$seed),'session_id'=>wpa_stable_uuid('purchase-session:'.$seed),'event_name'=>'purchase','url_path'=>'/checkout/order-received/','referrer_host'=>'','page_title'=>'Purchase','device_type'=>'unknown','browser_family'=>'unknown','user_id'=>(int)$o->get_customer_id(),'object_id'=>$seed,'value_decimal'=>(float)$o->get_total(),'currency'=>substr(sanitize_text_field($o->get_currency()),0,3),'event_data'=>wp_json_encode(array('order_id'=>(string)$seed,'items_count'=>(string)$o->get_item_count(),'source'=>'woocommerce_server')),'created_at'=>current_time('mysql',true)));}
 add_action('woocommerce_payment_complete','wpa_record_purchase',20,1);add_action('woocommerce_order_status_processing','wpa_record_purchase',20,1);add_action('woocommerce_order_status_completed','wpa_record_purchase',20,1);
 add_action('admin_menu',function(){add_menu_page('WP Analyz','WP Analyz','manage_options','wp-analyz','wpa_dashboard','dashicons-chart-area',58);add_submenu_page('wp-analyz','Settings','Settings','manage_options','wp-analyz-settings','wpa_settings_page');});
 add_action('admin_enqueue_scripts',function($hook){if(strpos((string)$hook,'wp-analyz')===false)return;wp_enqueue_style('wpa-admin',plugins_url('assets/css/admin.css',__FILE__),array(),WPA_VERSION);});
