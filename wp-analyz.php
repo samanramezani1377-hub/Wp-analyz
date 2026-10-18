@@ -42,12 +42,12 @@ function wpa_activate(){
  KEY session_created (session_id,created_at),
  KEY object_created (object_id,created_at)
  ) {$charset};";
- dbDelta($sql); if(!get_option('wpa_settings')) add_option('wpa_settings',wpa_defaults(),'','no'); update_option('wpa_db_version','1',false);
+ dbDelta($sql); if(!get_option('wpa_settings')) add_option('wpa_settings',wpa_defaults(),'','no'); update_option('wpa_db_version','2',false);
  if(!wp_next_scheduled('wpa_daily_cleanup')) wp_schedule_event(time()+HOUR_IN_SECONDS,'daily','wpa_daily_cleanup');
 }
 register_activation_hook(__FILE__,'wpa_activate');
 register_deactivation_hook(__FILE__,function(){wp_clear_scheduled_hook('wpa_daily_cleanup');});
-add_action('plugins_loaded',function(){ if(get_option('wpa_db_version')!=='1') wpa_activate(); });
+add_action('plugins_loaded',function(){ if(get_option('wpa_db_version')!=='2') wpa_activate(); });
 add_action('wpa_daily_cleanup',function(){ global $wpdb; $days=max(7,min(730,(int)wpa_settings()['retention_days'])); $wpdb->query($wpdb->prepare('DELETE FROM '.wpa_table().' WHERE created_at < %s LIMIT 10000',gmdate('Y-m-d H:i:s',time()-DAY_IN_SECONDS*$days))); });
 function wpa_uuid($v){$v=strtolower((string)$v);return preg_match('/^[a-f0-9]{8}-[a-f0-9]{4}-[1-8][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/',$v)?$v:false;}
 function wpa_stable_uuid($seed){$h=md5(wp_salt('auth').'|'.$seed);$h[12]='5';$h[16]=dechex((hexdec($h[16])&3)|8);return substr($h,0,8).'-'.substr($h,8,4).'-'.substr($h,12,4).'-'.substr($h,16,4).'-'.substr($h,20,12);}

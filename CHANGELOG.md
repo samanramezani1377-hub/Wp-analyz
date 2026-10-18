@@ -3,6 +3,7 @@
 ## 1.2.0 — 2026-10-18
 
 - Added an identifier-free baseline mode without analytics cookies or browser storage before consent.
+- Bumped the database schema version so existing installations migrate the event identifier columns safely.
 - Restricted pre-consent events to page/product/category views and performance metrics; omitted titles, referrers, searches, campaigns, and interaction events.
 - Added aggregate-only WooCommerce purchase reporting without customer/order IDs or visitor/session attribution when consent is absent.
 - Clarified that baseline records are event-level and still need an appropriate legal basis and transparent disclosure.
