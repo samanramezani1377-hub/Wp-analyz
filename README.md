@@ -37,6 +37,6 @@ This plugin does not display a consent banner itself. While the consent gate is 
 ## Developer notes
 
 - Event endpoint: `POST /wp-json/wp-analyz/v1/event`
-- Allowed events: `page_view`, `product_view`, `category_view`, `search`, `add_to_cart`, `remove_from_cart`, `begin_checkout`, `form_submit`, `outbound_click`, `purchase`, `login`, `sign_up`, `scroll_depth`, `web_vital`, `js_error`.
+- Browser endpoint events: `page_view`, `product_view`, `category_view`, `search`, `add_to_cart`, `remove_from_cart`, `begin_checkout`, `form_submit`, `outbound_click`, `login`, `sign_up`, `scroll_depth`, `web_vital`, `js_error`. `purchase` is accepted only from the server-side WooCommerce hooks, never from public browser submissions.
 - PHP lint: `find . -name '*.php' -print0 | xargs -0 -n1 php -l`
 - License: GPL-2.0-or-later.
