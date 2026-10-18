@@ -2,13 +2,13 @@
 
 ## 1.2.0 — 2026-10-18
 
-- Added daily aggregate counters for baseline page/product/category views and performance metrics without analytics cookies or browser storage before consent.
-- Added a dedicated aggregate table and database migration; daily retention and CSV export include grouped baseline data.
-- Restricted pre-consent events to page/product/category views and performance metrics; omitted titles, referrers, searches, campaigns, and interaction events.
-- Added daily aggregate-only WooCommerce purchase reporting without customer/order IDs or visitor/session attribution when no choice has been made; explicit rejection suppresses future purchase analytics.
-- Clarified that aggregate mode still needs an appropriate legal basis and transparent disclosure; no-cookie analytics is not automatically exempt from GDPR/ePrivacy rules.
-- Updated PHP/JavaScript smoke tests and privacy documentation.
-
+- Added a dedicated daily aggregate table for baseline page/product/category views and performance metrics; no per-event timestamp or visitor/session ID is stored for baseline events.
+- Restricted pre-consent browser events to page/product/category views and performance metrics; omitted page titles, referrers, searches, UTM campaigns, and interaction events.
+- Added daily aggregate WooCommerce purchase counts and revenue without customer/order IDs or visitor/session attribution when no consent choice has been made.
+- Explicit rejection persists in an essential consent-preference cookie and suppresses future browser and purchase analytics.
+- Added schema version 3 migration, daily retention cleanup, aggregate dashboard reporting, and CSV export support.
+- Clarified that no-cookie analytics still needs an appropriate legal basis and transparent disclosure and is not automatically exempt from GDPR/ePrivacy rules.
+- Updated PHP and JavaScript smoke tests.
 ## 1.1.0 — 2026-10-18
 
 - Added UTM campaign, search-term, and page-performance summaries to the admin dashboard.
