@@ -15,7 +15,7 @@ WP Analyz is a self-hosted analytics plugin for WordPress and WooCommerce. Event
 1. Upload the `wp-analyz` folder to `/wp-content/plugins/`, or upload the ZIP from **WordPress Admin → Plugins → Add New Plugin → Upload Plugin**.
 2. Activate **WP Analyz – Private Analytics**.
 3. Open **WP Analyz** in the WordPress admin menu and review its settings.
-4. Consent is required by default. Connect your existing consent banner:
+4. Aggregate baseline counts are enabled by default. Advanced tracking requires consent by default. Connect your existing consent manager:
 
 ```js
 window.wpAnalyzConsent('granted'); // after consent
@@ -26,10 +26,10 @@ The plugin does not display a consent banner itself.
 
 ## Privacy and limitations
 
-- When consent is required, the tracker does not start before consent. After consent, first-party session cookies (`wpa_consent`, `wpa_visitor_id`, `wpa_session_id`) are used to associate WooCommerce checkout orders with the current analytics session. They are cleared on rejection/revocation. If the browser blocks cookies or the checkout integration does not expose the context, a consent-required purchase may not be recorded.
+- Before consent, baseline mode records page views, product/category views, coarse device/browser classes, and performance metrics only. These are stored as event-level rows without visitor/session IDs; this is not a guarantee of true anonymisation. No page title, referrer, search term, UTM value, or interaction event is sent in baseline mode. It does not use analytics cookies, localStorage, or sessionStorage. An essential `wpa_consent=denied` preference cookie is kept after rejection so baseline events stop on subsequent pages. After consent, advanced tracking may use `wpa_consent`, `wpa_visitor_id`, and `wpa_session_id` cookies to associate WooCommerce orders with sessions.
 - The default visitor ID is held in `sessionStorage`; it does not reliably identify returning visitors across browser sessions. Persistent IDs use `localStorage` and may require consent.
-- If consent is disabled in settings, the administrator is responsible for establishing an appropriate legal basis. The plugin does not make a site legally compliant by itself.
-- Search terms and UTM campaign values are stored in event data and can contain personal information. Avoid collecting sensitive terms and review your privacy notice.
+- Baseline analytics still processes event-level data and requires an appropriate legal basis and transparent disclosure; absence of cookies or visitor IDs does not automatically exempt it from GDPR/ePrivacy rules. Enable it only after reviewing the laws applicable to your site and users. The plugin does not make a site legally compliant by itself.
+- After consent, search terms and UTM campaign values are stored in event data and can contain personal information. Avoid collecting sensitive terms and review your privacy notice.
 - Query strings and full referrer URLs are discarded. The plugin stores page paths, external referrer hostnames, and allowlisted UTM source/medium/campaign values.
 - LCP and CLS are collected where browser APIs support them. Interaction latency is a lightweight estimate, not a standards-complete INP measurement.
 - IP is used transiently for rate limiting and is not saved in event rows. Public collection endpoints can still receive fabricated traffic; use a WAF/rate limits and monitor anomalies.

@@ -20,6 +20,7 @@ const assert = require('assert');
     WPAnalyzConfig: {
       endpoint: 'https://example.test/wp-json/wp-analyz/v1/event',
       requireConsent: true,
+      baselineAnalytics: true,
       persistentVisitor: false,
       productId: 0,
       categoryId: 0,
@@ -57,16 +58,19 @@ const assert = require('assert');
   vm.createContext(context);
   vm.runInContext(fs.readFileSync('assets/js/tracker.js', 'utf8'), context);
 
-  assert.strictEqual(events.length, 0, 'does not track before consent');
+  assert.strictEqual(events.length, 1, 'records only a minimal aggregate page view before consent');
+  assert.strictEqual(session.size, 0, 'does not access sessionStorage before consent');
+  assert.strictEqual(local.size, 0, 'does not access localStorage before consent');
+  assert.strictEqual(cookieWrites.length, 0, 'does not set cookies before consent');
   window.wpAnalyzConsent('granted');
-  assert.strictEqual(events.length, 1, 'tracks one page view after consent');
+  assert.strictEqual(events.length, 1, 'does not duplicate page view after consent is granted');
   assert(cookieWrites.some((value) => value.startsWith('wpa_consent=granted')), 'writes consent cookie only after grant');
   assert(cookieWrites.some((value) => value.startsWith('wpa_visitor_id=')), 'writes visitor cookie for WooCommerce attribution');
   assert(cookieWrites.some((value) => value.startsWith('wpa_session_id=')), 'writes session cookie for WooCommerce attribution');
   const listenerCount = Object.values(windowListeners).reduce((n, list) => n + list.length, 0) + Object.values(documentListeners).reduce((n, list) => n + list.length, 0);
 
   window.wpAnalyzConsent('denied');
-  assert(cookieWrites.some((value) => value.startsWith('wpa_consent=;')), 'clears consent cookie on rejection/revocation');
+  assert(cookieWrites.some((value) => value.startsWith('wpa_consent=denied')), 'persists rejection in the essential consent-preference cookie');
   window.wpAnalyzConsent('granted');
   assert.strictEqual(events.length, 1, 'does not duplicate page view after revoke and re-grant on same page');
   const listenerCountAfterRegrant = Object.values(windowListeners).reduce((n, list) => n + list.length, 0) + Object.values(documentListeners).reduce((n, list) => n + list.length, 0);
@@ -75,8 +79,11 @@ const assert = require('assert');
   const body = await events[0].blob.text();
   const payload = JSON.parse(body);
   assert.strictEqual(payload.event, 'page_view', 'sends a page_view event');
+  assert.strictEqual(payload.mode, 'aggregate', 'uses aggregate mode before consent');
   assert.strictEqual(payload.url, 'https://example.test/products/item/', 'does not send URL query parameters');
-  assert(/^[a-f0-9-]{36}$/i.test(payload.visitor_id), 'uses a UUID visitor identifier');
+  assert.strictEqual(Object.prototype.hasOwnProperty.call(payload, 'visitor_id'), false, 'does not send a visitor ID before consent');
+  assert.strictEqual(Object.prototype.hasOwnProperty.call(payload, 'session_id'), false, 'does not send a session ID before consent');
+  assert.strictEqual(Object.prototype.hasOwnProperty.call(payload, 'referrer'), false, 'does not send referrer before consent');
   console.log('All WP Analyz tracker smoke tests passed.');
 })().catch((error) => {
   console.error(error);

@@ -12,6 +12,9 @@
   var visitorKey = 'wpa_visitor_v1';
   var sessionKey = 'wpa_session_v1';
   var observedMetrics = {};
+  var performanceObserved = false;
+  var baselineProductViewSent = false;
+  var baselineCategoryViewSent = false;
   var memoryIds = Object.create(null);
 
   function storageGet(storage, key) {
@@ -83,9 +86,37 @@
     } catch (e) { /* URLSearchParams may be unavailable in old browsers. */ }
     return result;
   }
+  function postPayload(payload) {
+    var body;
+    try { body = JSON.stringify(payload); } catch (e) { return; }
+    try {
+      if (navigator.sendBeacon && navigator.sendBeacon(config.endpoint, new Blob([body], { type: 'application/json' }))) return;
+      fetch(config.endpoint, {
+        method: 'POST', body: body,
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'same-origin', mode: 'same-origin', keepalive: true
+      }).catch(function () {});
+    } catch (e) { /* Analytics must never break the page. */ }
+  }
+  // Baseline mode deliberately uses no analytics cookies, localStorage, sessionStorage, visitor ID, or session ID.
+  function sendBaseline(eventName, data, objectId) {
+    if (!config.baselineAnalytics || denied) return;
+    if (['page_view', 'product_view', 'category_view', 'web_vital'].indexOf(eventName) === -1) return;
+    var safeData = {};
+    if (eventName === 'web_vital' && data) {
+      if (data.metric) safeData.metric = String(data.metric).slice(0, 80);
+      if (data.metric_value !== undefined) safeData.metric_value = String(data.metric_value).slice(0, 40);
+    }
+    postPayload({
+      mode: 'aggregate', event_id: uuid(), event: eventName,
+      url: safePageUrl(), device: deviceType(), browser: browserFamily(),
+      object_id: (eventName === 'product_view' || eventName === 'category_view') ? (Number(objectId) || 0) : 0,
+      data: safeData
+    });
+  }
   function send(eventName, data, objectId) {
     if (!started || denied) return;
-    var payload = {
+    postPayload({
       event_id: uuid(),
       visitor_id: getId(visitorStorage(), visitorKey),
       session_id: getId(window.sessionStorage, sessionKey),
@@ -97,17 +128,7 @@
       browser: browserFamily(),
       object_id: Number(objectId) || 0,
       data: Object.assign({}, campaignData(), data || {})
-    };
-    var body;
-    try { body = JSON.stringify(payload); } catch (e) { return; }
-    try {
-      if (navigator.sendBeacon && navigator.sendBeacon(config.endpoint, new Blob([body], { type: 'application/json' }))) return;
-      fetch(config.endpoint, {
-        method: 'POST', body: body,
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'same-origin', mode: 'same-origin', keepalive: true
-      }).catch(function () {});
-    } catch (e) { /* Analytics must never break the page. */ }
+    });
   }
   function setCookie(name, value) {
     try {
@@ -123,6 +144,12 @@
       document.cookie = cookie;
     } catch (e) { /* Cookies may be disabled by browser policy. */ }
   }
+  function readConsentCookie() {
+    try {
+      var match = document.cookie.match(/(?:^|;\s*)wpa_consent=([^;]*)/);
+      return match ? decodeURIComponent(match[1]) : '';
+    } catch (e) { return ''; }
+  }
   function syncConsentCookies() {
     var visitor = getId(visitorStorage(), visitorKey);
     var session = getId(window.sessionStorage, sessionKey);
@@ -133,9 +160,12 @@
   function reportMetric(name, value) {
     if (typeof value !== 'number' || !isFinite(value) || value < 0 || observedMetrics[name] === value) return;
     observedMetrics[name] = value;
-    send('web_vital', { metric: name, metric_value: String(Math.round(value * 100) / 100) });
+    var metricData = { metric: name, metric_value: String(Math.round(value * 100) / 100) };
+    if (started) send('web_vital', metricData); else sendBaseline('web_vital', metricData);
   }
   function observePerformance() {
+    if (performanceObserved || denied) return;
+    performanceObserved = true;
     if (!('PerformanceObserver' in window)) return;
     var lcpValue = null;
     var clsValue = 0;
@@ -208,8 +238,8 @@
     syncConsentCookies();
     if (initialized) return;
     if (!sentPageView) { sentPageView = true; send('page_view'); }
-    if (config.productId) send('product_view', {}, config.productId);
-    if (config.categoryId) send('category_view', {}, config.categoryId);
+    if (config.productId && !baselineProductViewSent) send('product_view', {}, config.productId);
+    if (config.categoryId && !baselineCategoryViewSent) send('category_view', {}, config.categoryId);
     if (config.searchTerm) send('search', { term: String(config.searchTerm).slice(0, 120) });
     observePerformance();
 
@@ -262,7 +292,8 @@
     storageRemove(window.sessionStorage, visitorKey);
     storageRemove(window.sessionStorage, sessionKey);
     memoryIds = Object.create(null);
-    clearCookie('wpa_consent');
+    // Retain only the essential consent preference so a rejection persists across pages.
+    setCookie('wpa_consent', 'denied');
     clearCookie('wpa_visitor_id');
     clearCookie('wpa_session_id');
     if (config.persistentVisitor) {
@@ -280,9 +311,20 @@
   };
 
   if (config.requireConsent) {
-    var consent = storageGet(window.sessionStorage, consentKey);
-    if (consent === 'granted') start();
-    else if (consent === 'denied') denied = true;
+    // Read only the essential consent-preference cookie, never analytics IDs/storage, before consent.
+    var consentState = readConsentCookie();
+    if (consentState === 'denied') {
+      denied = true;
+    } else if (consentState === 'granted') {
+      start();
+    } else if (config.baselineAnalytics) {
+      // Minimal identifier-free baseline, only where the site's legal basis permits it.
+      sendBaseline('page_view');
+      sentPageView = true;
+      if (config.productId) { sendBaseline('product_view', {}, config.productId); baselineProductViewSent = true; }
+      if (config.categoryId) { sendBaseline('category_view', {}, config.categoryId); baselineCategoryViewSent = true; }
+      observePerformance();
+    }
   } else {
     start();
   }
