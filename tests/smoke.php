@@ -20,10 +20,12 @@ function esc_url_raw($url, $protocols = null) {
 function sanitize_text_field($value) { return trim(strip_tags((string) $value)); }
 function wp_salt($scheme = 'auth') { return 'wp-analyz-test-salt'; }
 function wp_unslash($value) { return $value; }
+function wp_json_encode($value, $options = 0) { return json_encode($value, $options); }
 function sanitize_key($value) { return preg_replace('/[^a-z0-9_\-]/', '', strtolower((string) $value)); }
 require dirname(__DIR__) . '/wp-analyz.php';
 
 class FakeWpaOrder { public $meta = array(); public function update_meta_data($key, $value) { $this->meta[$key] = $value; } public function save() {} }
+class FakeWpaDb { public $prefix = 'wp_'; public $queries = array(); public function prepare($query, ...$args) { return $query; } public function query($query) { $this->queries[] = $query; return 1; } }
 
 function check($condition, $message) {
     if (!$condition) { fwrite(STDERR, "FAIL: {$message}\n"); exit(1); }
@@ -38,6 +40,10 @@ check(wpa_defaults()['baseline_analytics'] === 1, 'aggregate baseline analytics 
 check(wpa_defaults()['persistent_visitor'] === 0, 'persistent visitor tracking is disabled by default');
 $mergedCounts = wpa_merge_count_rows(array(array('label'=>'/a','total'=>2)), array(array('label'=>'/a','total'=>3), array('label'=>'/b','total'=>1)), 10);
 check($mergedCounts[0]['label'] === '/a' && $mergedCounts[0]['total'] === 5, 'merges baseline and consented page counters');
+$GLOBALS['wpdb'] = new FakeWpaDb();
+wpa_increment_aggregate('page_view', '/sample/', 'mobile', 'chrome');
+check(wpa_aggregate_table() === 'wp_wpa_aggregates', 'uses the dedicated aggregate table');
+check(strpos($GLOBALS['wpdb']->queries[0], 'ON DUPLICATE KEY UPDATE') !== false, 'increments daily aggregate counters without inserting event rows');
 check(wpa_clean_path('https://example.test/products/item/?email=secret#section') === '/products/item/', 'keeps only same-site path and drops query/fragment');
 check(wpa_clean_path('https://attacker.test/track') === false, 'rejects foreign page URLs');
 check(wpa_stable_uuid('purchase:123') === wpa_stable_uuid('purchase:123'), 'stable UUID is deterministic');
