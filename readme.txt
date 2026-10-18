@@ -11,10 +11,10 @@ License URI: https://www.gnu.org/licenses/gpl-2.0.html
 Self-hosted WordPress analytics. No Google Analytics, Google Tag Manager, or third-party analytics script.
 
 == Features ==
-* First-party deferred tracker: page views, product/category views, search, scroll depth, outbound clicks, cart clicks, checkout click, form submits, navigation timing.
-* Dashboard for visitors, sessions, page views, event counts, purchases, revenue, popular pages, referrer hosts and devices.
-* WooCommerce server-side purchase events for paid orders, with deterministic event IDs to avoid duplicate purchase counts. They are suppressed while the consent gate is enabled because server-side consent cannot be reliably inferred from a browser session.
-* Consent gate enabled by default; session-only visitor IDs by default; optional persistent visitor IDs.
+* First-party deferred tracker: page views, product/category views, search, scroll depth, outbound clicks, cart clicks, checkout click, form submits, navigation timing, LCP/CLS and a clearly labeled interaction-latency estimate, LCP/CLS and a clearly labeled interaction-latency estimate.
+* Dashboard for visitors, sessions, page views, event counts, purchases, revenue, popular pages, referrer hosts, devices, UTM campaigns, search terms, and performance metric summaries.
+* WooCommerce server-side purchase events for paid orders, with deterministic event IDs to avoid duplicate purchase counts. After consent, first-party session cookies let classic and Store API checkout flows associate paid orders with the browser session where supported.
+* Consent gate enabled by default; session-only visitor IDs by default; optional persistent visitor IDs. Consent is integrated through `window.wpAnalyzConsent('granted')` / `('denied')`; the plugin does not provide its own banner.
 * Retention cleanup, administrator CSV export, privacy policy text and WordPress personal data exporter/eraser hooks.
 * Does not persist full IP addresses in the analytics events table and makes no third-party analytics requests.
 
@@ -29,7 +29,7 @@ Self-hosted WordPress analytics. No Google Analytics, Google Tag Manager, or thi
 * The default visitor ID lives in sessionStorage and does not reliably identify returning visitors across sessions. Persistent IDs use localStorage and may require consent.
 * WooCommerce purchases are recorded server-side, but are not automatically joined to the browser session. They count paid orders without depending on the thank-you page.
 * Search terms may contain personal information. Review your legal basis and avoid collecting sensitive or unnecessary search data.
-* Query strings and full referrer URLs are discarded. Only page path and external referrer hostname are stored.
+* Query strings and full referrer URLs are discarded. Only page path and external referrer hostname are stored; the allowlisted UTM source/medium/campaign parameters and search terms are stored in event data. Search terms can contain personal information.\n* LCP and CLS are collected where browser APIs support them. Interaction latency is reported as a lightweight estimate, not a standards-complete INP metric.
 * IP is used transiently for rate limiting, not saved in event rows. A public endpoint can still receive forged traffic; use WAF/rate limits and monitor anomalies in production.
 * This is a technical tool, not legal advice or a guarantee of GDPR/ePrivacy compliance.
 * Analytics history is preserved by default on uninstall. To delete the table during uninstall, define `WPA_DELETE_DATA_ON_UNINSTALL` as true in wp-config.php before deleting the plugin.
