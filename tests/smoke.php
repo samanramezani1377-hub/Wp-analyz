@@ -19,7 +19,11 @@ function esc_url_raw($url, $protocols = null) {
 }
 function sanitize_text_field($value) { return trim(strip_tags((string) $value)); }
 function wp_salt($scheme = 'auth') { return 'wp-analyz-test-salt'; }
+function wp_unslash($value) { return $value; }
+function sanitize_key($value) { return preg_replace('/[^a-z0-9_\-]/', '', strtolower((string) $value)); }
 require dirname(__DIR__) . '/wp-analyz.php';
+
+class FakeWpaOrder { public $meta = array(); public function update_meta_data($key, $value) { $this->meta[$key] = $value; } public function save() {} }
 
 function check($condition, $message) {
     if (!$condition) { fwrite(STDERR, "FAIL: {$message}\n"); exit(1); }
@@ -35,6 +39,16 @@ check(wpa_clean_path('https://example.test/products/item/?email=secret#section')
 check(wpa_clean_path('https://attacker.test/track') === false, 'rejects foreign page URLs');
 check(wpa_stable_uuid('purchase:123') === wpa_stable_uuid('purchase:123'), 'stable UUID is deterministic');
 check(wpa_stable_uuid('purchase:123') !== wpa_stable_uuid('purchase:124'), 'stable UUID differs for distinct seeds');
+check(wpa_csv_safe('=1+1') === '\'=1+1', 'CSV export neutralizes spreadsheet formulas');
+$_COOKIE = array();
+$orderWithoutConsent = new FakeWpaOrder();
+wpa_capture_order_analytics_context($orderWithoutConsent);
+check(empty($orderWithoutConsent->meta), 'does not associate orders before consent');
+$_COOKIE = array('wpa_consent' => 'granted', 'wpa_visitor_id' => '550e8400-e29b-41d4-a716-446655440000', 'wpa_session_id' => '550e8400-e29b-41d4-a716-446655440001');
+$orderWithConsent = new FakeWpaOrder();
+wpa_capture_order_analytics_context($orderWithConsent);
+check(($orderWithConsent->meta['_wpa_analytics_consent'] ?? '') === 'granted', 'captures consent state on checkout order');
+check(($orderWithConsent->meta['_wpa_visitor_id'] ?? '') === $_COOKIE['wpa_visitor_id'], 'associates consented checkout with visitor ID');
 $plugin = file_get_contents(dirname(__DIR__) . '/wp-analyz.php');
 check(strpos($plugin, "'purchase','login'") === false, 'public event allowlist does not accept purchase events');
 check(strpos($plugin, "require_consent") !== false, 'server-side purchase events respect the consent gate');
