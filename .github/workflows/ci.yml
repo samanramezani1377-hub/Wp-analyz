@@ -7,7 +7,7 @@ on:
     branches: [main]
 
 jobs:
-  lint:
+  lint-and-smoke:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -17,9 +17,13 @@ jobs:
           php-version: '8.2'
       - name: PHP syntax checks
         run: find . -name '*.php' -print0 | xargs -0 -n1 php -l
+      - name: PHP smoke tests
+        run: php tests/smoke.php
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '20'
       - name: JavaScript syntax check
         run: node --check assets/js/tracker.js
+      - name: Tracker smoke tests
+        run: node tests/tracker-smoke.js
