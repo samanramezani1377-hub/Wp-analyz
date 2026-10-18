@@ -13,7 +13,7 @@ Self-hosted WordPress analytics. No Google Analytics, Google Tag Manager, or thi
 == Features ==
 * First-party deferred tracker: page views, product/category views, search, scroll depth, outbound clicks, cart clicks, checkout click, form submits, navigation timing.
 * Dashboard for visitors, sessions, page views, event counts, purchases, revenue, popular pages, referrer hosts and devices.
-* WooCommerce server-side purchase events for paid orders, with deterministic event IDs to avoid duplicate purchase counts.
+* WooCommerce server-side purchase events for paid orders, with deterministic event IDs to avoid duplicate purchase counts. They are suppressed while the consent gate is enabled because server-side consent cannot be reliably inferred from a browser session.
 * Consent gate enabled by default; session-only visitor IDs by default; optional persistent visitor IDs.
 * Retention cleanup, administrator CSV export, privacy policy text and WordPress personal data exporter/eraser hooks.
 * Does not persist full IP addresses in the analytics events table and makes no third-party analytics requests.
@@ -25,7 +25,7 @@ Self-hosted WordPress analytics. No Google Analytics, Google Tag Manager, or thi
 4. Consent is required by default. Connect your existing consent banner by calling `window.wpAnalyzConsent('granted')` after consent and `window.wpAnalyzConsent('denied')` after rejection/revocation.
 
 == Privacy and limitations ==
-* This plugin does not display a consent banner; integrate it with your actual consent-management system.
+* This plugin does not display a consent banner; integrate it with your actual consent-management system. While the consent gate is enabled, server-side purchase analytics are also suppressed. Only disable the consent gate if you have established an appropriate legal basis for collecting the relevant analytics.
 * The default visitor ID lives in sessionStorage and does not reliably identify returning visitors across sessions. Persistent IDs use localStorage and may require consent.
 * WooCommerce purchases are recorded server-side, but are not automatically joined to the browser session. They count paid orders without depending on the thank-you page.
 * Search terms may contain personal information. Review your legal basis and avoid collecting sensitive or unnecessary search data.
