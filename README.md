@@ -6,7 +6,7 @@ A self-hosted WordPress and WooCommerce analytics plugin. Event data is stored i
 
 - Lightweight deferred first-party tracker for page views, product/category views, search, scroll depth, outbound clicks, add/remove-to-cart clicks, checkout-button clicks, basic form events, and navigation timing.
 - Admin dashboard for visitors, sessions, page views, events, purchases, revenue, popular pages, referrer hosts, devices, and daily summaries.
-- WooCommerce server-side purchase events for paid orders, with deterministic event IDs to prevent duplicate purchase counts.
+- WooCommerce server-side purchase events for paid orders, with deterministic event IDs to prevent duplicate purchase counts. They are suppressed while the consent gate is enabled because server-side consent cannot be reliably inferred from a browser session.
 - Consent gate enabled by default, session-only browser identifiers by default, optional persistent visitor IDs, configurable retention, CSV export, and WordPress personal-data exporter/eraser hooks.
 - Full IP addresses are not stored in the analytics events table; no third-party analytics network calls are made.
 
@@ -22,7 +22,7 @@ window.wpAnalyzConsent('granted'); // after consent
 window.wpAnalyzConsent('denied');  // rejection or revocation
 ```
 
-This plugin does not display a consent banner itself.
+This plugin does not display a consent banner itself. While the consent gate is enabled, server-side purchase analytics are also suppressed. Only disable the consent gate if you have established an appropriate legal basis for collecting the relevant analytics.
 
 ## Privacy and limitations
 
