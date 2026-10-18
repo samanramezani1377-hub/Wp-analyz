@@ -76,6 +76,11 @@ function wpa_capture_order_analytics_context($order, $save = false) {
  if (!is_object($order) || !method_exists($order, 'update_meta_data')) return;
  $settings = wpa_settings();
  $status = isset($_COOKIE['wpa_consent']) ? sanitize_key(wp_unslash($_COOKIE['wpa_consent'])) : '';
+ if ('denied' === $status) {
+  $order->update_meta_data('_wpa_analytics_consent', 'denied');
+  if ($save && method_exists($order, 'save')) $order->save();
+  return;
+ }
  if (!empty($settings['require_consent']) && 'granted' !== $status) return;
  if (empty($settings['require_consent']) && !in_array($status, array('active', 'granted'), true)) return;
  $visitor = wpa_uuid(isset($_COOKIE['wpa_visitor_id']) ? wp_unslash($_COOKIE['wpa_visitor_id']) : '');
@@ -93,7 +98,9 @@ function wpa_record_purchase($order_id) {
  if (empty($settings['woocommerce']) || !function_exists('wc_get_order')) return;
  $order = wc_get_order($order_id);
  if (!$order || !$order->is_paid()) return;
- $consented = 'granted' === (string) $order->get_meta('_wpa_analytics_consent', true);
+ $consent_state = (string) $order->get_meta('_wpa_analytics_consent', true);
+ if ('denied' === $consent_state) return;
+ $consented = 'granted' === $consent_state;
  $seed = (int) $order_id;
  $visitor = $consented ? wpa_uuid($order->get_meta('_wpa_visitor_id', true)) : false;
  $session = $consented ? wpa_uuid($order->get_meta('_wpa_session_id', true)) : false;
