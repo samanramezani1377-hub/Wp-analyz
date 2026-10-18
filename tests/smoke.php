@@ -36,6 +36,8 @@ check(wpa_uuid('550e8400-e29b-01d4-a716-446655440000') === false, 'rejects unsup
 check(wpa_defaults()['require_consent'] === 1, 'advanced tracking consent gate is enabled by default');
 check(wpa_defaults()['baseline_analytics'] === 1, 'aggregate baseline analytics is enabled by default');
 check(wpa_defaults()['persistent_visitor'] === 0, 'persistent visitor tracking is disabled by default');
+$mergedCounts = wpa_merge_count_rows(array(array('label'=>'/a','total'=>2)), array(array('label'=>'/a','total'=>3), array('label'=>'/b','total'=>1)), 10);
+check($mergedCounts[0]['label'] === '/a' && $mergedCounts[0]['total'] === 5, 'merges baseline and consented page counters');
 check(wpa_clean_path('https://example.test/products/item/?email=secret#section') === '/products/item/', 'keeps only same-site path and drops query/fragment');
 check(wpa_clean_path('https://attacker.test/track') === false, 'rejects foreign page URLs');
 check(wpa_stable_uuid('purchase:123') === wpa_stable_uuid('purchase:123'), 'stable UUID is deterministic');
@@ -58,7 +60,8 @@ $plugin = file_get_contents(dirname(__DIR__) . '/wp-analyz.php');
 check(strpos($plugin, "'purchase','login'") === false, 'public event allowlist does not accept purchase events');
 check(strpos($plugin, "require_consent") !== false, 'advanced server-side purchase attribution respects the consent gate');
 check(strpos($plugin, 'baseline_allowed') !== false && strpos($plugin, "'mode'") !== false, 'server supports restricted aggregate mode without visitor/session IDs');
-check(strpos($plugin, "'source' => 'woocommerce_aggregate'") !== false, 'unconsented WooCommerce purchases use aggregate-only fields');
+check(strpos($plugin, "wpa_increment_aggregate('purchase'") !== false, 'unconsented WooCommerce purchases update daily aggregate counters');
+check(strpos($plugin, 'wpa_increment_aggregate($name') !== false, 'baseline browser events update daily aggregate counters instead of event rows');
 check(strpos($plugin, 'strlen((string)$body)>8192') !== false, 'rejects oversized event payloads');
 check(strpos($plugin, 'wpa_csv_safe') !== false, 'CSV export has spreadsheet-formula mitigation');
 $tracker = file_get_contents(dirname(__DIR__) . '/assets/js/tracker.js');
