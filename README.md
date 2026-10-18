@@ -1,42 +1,44 @@
 # WP Analyz — Private WordPress Analytics
 
-A self-hosted WordPress and WooCommerce analytics plugin. Event data is stored in a dedicated table in the site's own WordPress database. It does not load Google Analytics, Google Tag Manager, or any third-party analytics scripts.
+WP Analyz is a self-hosted analytics plugin for WordPress and WooCommerce. Events are stored in a dedicated table in the site's own WordPress database. It does not load Google Analytics, Google Tag Manager, or third-party analytics scripts.
 
 ## Features
 
-- Lightweight deferred first-party tracker for page views, product/category views, search, scroll depth, outbound clicks, add/remove-to-cart clicks, checkout-button clicks, basic form events, and navigation timing, LCP/CLS and a clearly labeled interaction-latency estimate, LCP/CLS and a clearly labeled interaction-latency estimate.
-- Admin dashboard for visitors, sessions, page views, events, purchases, revenue, popular pages, referrer hosts, devices, UTM campaigns, search terms, performance metric summaries, and daily summaries.
-- WooCommerce server-side purchase events for paid orders, with deterministic event IDs to prevent duplicate purchase counts. After consent, first-party session cookies let classic and Store API checkout flows associate paid orders with the browser session where supported.
-- Consent gate enabled by default, session-only browser identifiers by default, optional persistent visitor IDs, configurable retention, CSV export with spreadsheet-formula mitigation, and WordPress personal-data exporter/eraser hooks.
-- Full IP addresses are not stored in the analytics events table; no third-party analytics network calls are made.
+- Deferred first-party tracker for page views, product/category views, search-result views, scroll depth, outbound clicks, add/remove-to-cart clicks, checkout-button clicks, basic form events, JavaScript errors, TTFB, LCP, CLS, and a clearly labeled interaction-latency estimate.
+- Dashboard for visitors, sessions, page views, events, purchases, revenue, popular pages, referrer hosts, devices, UTM campaigns, search terms, performance metric summaries, and daily summaries.
+- WooCommerce server-side purchase events with deterministic event IDs to prevent duplicate order counts. After consent, first-party session cookies can associate classic and Store API checkout orders with the browser session where supported.
+- Consent gate enabled by default, session-only visitor IDs by default, optional persistent visitor IDs, configurable retention, CSV export with spreadsheet-formula mitigation, and WordPress personal-data exporter/eraser hooks.
+- No full IP addresses stored in event rows, an 8 KB request-body limit, per-IP rate limiting, and no third-party analytics requests.
 
 ## Installation
 
 1. Upload the `wp-analyz` folder to `/wp-content/plugins/`, or upload the ZIP from **WordPress Admin → Plugins → Add New Plugin → Upload Plugin**.
 2. Activate **WP Analyz – Private Analytics**.
 3. Open **WP Analyz** in the WordPress admin menu and review its settings.
-4. Consent is required by default. Connect your existing consent banner by calling:
+4. Consent is required by default. Connect your existing consent banner:
 
 ```js
 window.wpAnalyzConsent('granted'); // after consent
 window.wpAnalyzConsent('denied');  // rejection or revocation
 ```
 
-This plugin does not display a consent banner itself. While the consent gate is enabled, server-side purchase analytics are also suppressed. Only disable the consent gate if you have established an appropriate legal basis for collecting the relevant analytics.
+The plugin does not display a consent banner itself.
 
 ## Privacy and limitations
 
+- When consent is required, the tracker does not start before consent. After consent, first-party session cookies (`wpa_consent`, `wpa_visitor_id`, `wpa_session_id`) are used to associate WooCommerce checkout orders with the current analytics session. They are cleared on rejection/revocation. If the browser blocks cookies or the checkout integration does not expose the context, a consent-required purchase may not be recorded.
 - The default visitor ID is held in `sessionStorage`; it does not reliably identify returning visitors across browser sessions. Persistent IDs use `localStorage` and may require consent.
-- Server-side WooCommerce purchases are recorded independently of the thank-you page, but are not automatically joined to a browser session.
-- Search terms can contain personal information. Review your legal basis and avoid collecting sensitive or unnecessary search data.
-- Query strings and full referrer URLs are discarded. Only the page path and external referrer hostname are stored.
-- IP is used transiently for rate limiting and is not saved in event rows. Public collection endpoints can still receive fabricated traffic; use a WAF/rate limits and monitor anomalies in production.
+- If consent is disabled in settings, the administrator is responsible for establishing an appropriate legal basis. The plugin does not make a site legally compliant by itself.
+- Search terms and UTM campaign values are stored in event data and can contain personal information. Avoid collecting sensitive terms and review your privacy notice.
+- Query strings and full referrer URLs are discarded. The plugin stores page paths, external referrer hostnames, and allowlisted UTM source/medium/campaign values.
+- LCP and CLS are collected where browser APIs support them. Interaction latency is a lightweight estimate, not a standards-complete INP measurement.
+- IP is used transiently for rate limiting and is not saved in event rows. Public collection endpoints can still receive fabricated traffic; use a WAF/rate limits and monitor anomalies.
 - This is a technical tool, not legal advice or a guarantee of GDPR/ePrivacy compliance.
 - Analytics history is preserved by default on uninstall. To delete the table during uninstall, define `WPA_DELETE_DATA_ON_UNINSTALL` as true in `wp-config.php` before deleting the plugin.
 
 ## Developer notes
 
 - Event endpoint: `POST /wp-json/wp-analyz/v1/event`
-- Browser endpoint events: `page_view`, `product_view`, `category_view`, `search`, `add_to_cart`, `remove_from_cart`, `begin_checkout`, `form_submit`, `outbound_click`, `login`, `sign_up`, `scroll_depth`, `web_vital`, `js_error`. `purchase` is accepted only from the server-side WooCommerce hooks, never from public browser submissions.
-- PHP lint: `find . -name '*.php' -print0 | xargs -0 -n1 php -l`
+- Purchase is accepted only from server-side WooCommerce hooks, never from public browser submissions.
+- Run the smoke tests with `php tests/smoke.php` and `node tests/tracker-smoke.js`.
 - License: GPL-2.0-or-later.
