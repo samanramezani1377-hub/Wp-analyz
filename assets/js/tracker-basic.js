@@ -8,7 +8,7 @@
   // page title, search terms, UTM values, or per-visitor history.
   function explicitlyDenied() {
     try {
-      var match = document.cookie.match(/(?:^|;\\s*)wpa_consent=([^;]*)/);
+      var match = document.cookie.match(/(?:^|;\s*)wpa_consent=([^;]*)/);
       return !!(match && decodeURIComponent(match[1]) === 'denied');
     } catch (e) { return false; }
   }
@@ -33,10 +33,10 @@
   }
   function browserFamily() {
     var ua = navigator.userAgent || '';
-    if (/Edg\\//.test(ua)) return 'edge';
-    if (/Firefox\\//.test(ua)) return 'firefox';
-    if (/Chrome\\//.test(ua)) return 'chrome';
-    if (/Safari\\//.test(ua)) return 'safari';
+    if (/Edg\//.test(ua)) return 'edge';
+    if (/Firefox\//.test(ua)) return 'firefox';
+    if (/Chrome\//.test(ua)) return 'chrome';
+    if (/Safari\//.test(ua)) return 'safari';
     return 'other';
   }
   function safePageUrl() {
