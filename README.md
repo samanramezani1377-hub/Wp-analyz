@@ -46,7 +46,9 @@ The plugin does not display a consent banner itself.
 
 - Event endpoint: `POST /wp-json/wp-analyz/v1/event`
 - Purchase is accepted only from server-side WooCommerce hooks, never from public browser submissions.
-- Campaign, search-term, and performance summaries scan matching event rows in bounded keyset batches rather than silently stopping at the first 5,000 rows.
+- Campaign, search-term, and performance summaries scan matching event rows in bounded keyset batches. CSV exports stream event and aggregate rows in batches rather than silently stopping at a fixed 50,000-row cap.
+- Revenue is net of recorded full/partial WooCommerce refunds and shown separately by currency; refund/order hooks are idempotency-guarded. Validate gateway-specific refund flows in a staging WooCommerce install before production use.
+- Product reports compare view and add-to-cart event counts; funnel metrics are event counts, not unique-user conversion rates. WooCommerce status counts are cached briefly and may lag status changes by up to five minutes.
 - WordPress personal-data export/erasure also looks up WooCommerce orders by billing email, including guest orders, and handles their linked purchase analytics.
 - Run the smoke tests with `php tests/smoke.php`, `node tests/tracker-smoke.js`, and `node tests/basic-tracker-smoke.js`.
 - License: GPL-2.0-or-later.
