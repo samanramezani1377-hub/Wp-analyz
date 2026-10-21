@@ -90,6 +90,7 @@ check(strpos($uninstall, 'WPA_DELETE_DATA_ON_UNINSTALL') === false, 'uninstall c
 
 
 check(strpos($plugin, 'assets/js/tracker-basic.js') !== false && strpos($plugin, 'assets/js/tracker.js') !== false, 'front end selects a separate tracker for each consent mode');
+check(strpos($plugin, "'require_consent'=>0") !== false, 'advanced consent-required analytics is off by default');
 check(strpos($plugin, "'scroll_depth','outbound_click','add_to_cart'") !== false, 'aggregate-only mode supports limited interaction counts without visitor IDs');
 check(strpos($plugin, 'strlen((string)$body)>8192') !== false, 'rejects oversized event payloads');
 check(strpos($plugin, 'wpa_csv_safe') !== false, 'CSV export has spreadsheet-formula mitigation');
