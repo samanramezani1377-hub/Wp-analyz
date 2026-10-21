@@ -73,6 +73,15 @@ check(strpos($plugin, "'billing_email'=>sanitize_email(\$email)") !== false, 'pr
 check(strpos($plugin, 'wpa_each_event_data_row') !== false && strpos($plugin, 'wpa_event_data_rows') === false, 'campaign, search, and performance reports iterate through all matching event rows in batches');
 check(strpos($plugin, 'wpa_increment_aggregate($name') !== false, 'baseline browser events update daily aggregate counters instead of event rows');
 check(strpos($plugin, 'wpa_advanced_tracking_disabled') !== false, 'server rejects advanced events while consent mode is disabled');
+check(strpos($plugin, 'wpa_currency_revenue_report') !== false, 'dashboard reports revenue separately by currency');
+check(strpos($plugin, 'wpa_product_activity_report') !== false, 'dashboard includes product views and add-to-cart counts');
+check(strpos($plugin, 'wc_order_product_lookup') !== false, 'product report can include WooCommerce units sold when lookup tables exist');
+check(strpos($plugin, 'wpa_woocommerce_status_report') !== false, 'dashboard includes WooCommerce order status counts');
+check(strpos($plugin, 'wpa_record_refund') !== false, 'WooCommerce refunds are recorded as negative revenue');
+check(strpos($plugin, '_wpa_analytics_purchase_recorded') !== false, 'WooCommerce purchase hooks have an idempotency marker');
+check(strpos($plugin, 'created_at < %s') !== false, 'reports can apply an exclusive upper date bound');
+check(strpos($plugin, 'KEY event_name_created_id (event_name,created_at,id)') !== false, 'event report scans have a supporting composite index');
+
 check(strpos($plugin, 'assets/js/tracker-basic.js') !== false && strpos($plugin, 'assets/js/tracker.js') !== false, 'front end selects a separate tracker for each consent mode');
 check(strpos($plugin, "'scroll_depth','outbound_click','add_to_cart'") !== false, 'aggregate-only mode supports limited interaction counts without visitor IDs');
 check(strpos($plugin, 'strlen((string)$body)>8192') !== false, 'rejects oversized event payloads');

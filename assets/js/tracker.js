@@ -244,13 +244,21 @@
     observePerformance();
 
     var scrollDepth = 0;
-    window.addEventListener('scroll', function () {
+    var scrollPending = false;
+    function recordScrollDepth() {
+      scrollPending = false;
       var maxScroll = Math.max(1, document.documentElement.scrollHeight - window.innerHeight);
       var depth = Math.min(100, Math.floor((window.scrollY / maxScroll) * 4) * 25);
       if (depth >= 25 && depth > scrollDepth) {
         scrollDepth = depth;
         send('scroll_depth', { depth: String(depth) });
       }
+    }
+    window.addEventListener('scroll', function () {
+      if (scrollPending) return;
+      scrollPending = true;
+      if (typeof window.requestAnimationFrame === 'function') window.requestAnimationFrame(recordScrollDepth);
+      else recordScrollDepth();
     }, { passive: true });
 
     document.addEventListener('click', function (event) {
@@ -265,7 +273,7 @@
       if (target.matches('.add_to_cart_button,.single_add_to_cart_button,[name="add-to-cart"]')) {
         send('add_to_cart', { source: 'click' }, target.getAttribute('data-product_id') || target.value || config.productId || 0);
       }
-      if (target.matches('.remove_from_cart_button,a.remove')) send('remove_from_cart', { source: 'click' });
+      if (target.matches('.remove_from_cart_button,a.remove')) send('remove_from_cart', { source: 'click' }, target.getAttribute('data-product_id') || 0);
       if (target.matches('#place_order,button[name="woocommerce_checkout_place_order"]')) send('begin_checkout', { source: 'checkout_button' });
     }, true);
 

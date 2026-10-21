@@ -7,7 +7,10 @@ WP Analyz is a self-hosted analytics plugin for WordPress and WooCommerce. Event
 - Two front-end modes: consent-enabled advanced tracking, or a separate lightweight aggregate-only tracker when consent mode is disabled.
 - Aggregate-only mode records page/product/category views, search-result counts (not terms), coarse device/browser classes, scroll/click/cart/checkout/form/error event counts, performance metrics, and aggregate WooCommerce sales without visitor/session IDs, analytics cookies, browser storage, page titles, referrers, search terms, or UTM values.
 - Deferred first-party advanced tracker for page views, product/category views, search-result views, scroll depth, outbound clicks, add/remove-to-cart clicks, checkout-button clicks, basic form events, JavaScript errors, TTFB, LCP, CLS, and a clearly labeled interaction-latency estimate.
-- Dashboard for visitors, sessions, page views, events, purchases, revenue, popular pages, referrer hosts, devices, UTM campaigns, search terms, performance metric summaries, and daily summaries.
+- Dashboard for consented visitors/sessions, page views, events, purchases, popular pages, referrer hosts, devices, UTM campaigns, search terms, performance metrics, daily trends, custom date ranges, and previous-period comparisons.
+- Product activity report compares product views and add-to-cart events, and adds units sold from WooCommerce lookup tables when available; funnel counts are explicitly labeled as event counts rather than unique-user conversion rates.
+- WooCommerce order-status summary, idempotent purchase recording, refund events that reduce net revenue, and revenue reports separated by currency.
+- Scroll tracking is throttled to animation frames, and report scans use bounded keyset batches with a supporting composite index.
 - WooCommerce server-side purchase events with deterministic event IDs to prevent duplicate order counts. After consent, first-party session cookies can associate classic and Store API checkout orders with the browser session where supported.
 - Consent gate enabled by default, session-only visitor IDs by default, optional persistent visitor IDs, configurable retention, CSV export with spreadsheet-formula mitigation, and WordPress personal-data exporter/eraser hooks.
 - No full IP addresses stored in event rows, an 8 KB request-body limit, per-IP rate limiting, and no third-party analytics requests.
@@ -43,7 +46,9 @@ The plugin does not display a consent banner itself.
 
 - Event endpoint: `POST /wp-json/wp-analyz/v1/event`
 - Purchase is accepted only from server-side WooCommerce hooks, never from public browser submissions.
-- Campaign, search-term, and performance summaries scan matching event rows in bounded keyset batches rather than silently stopping at the first 5,000 rows.
+- Campaign, search-term, and performance summaries scan matching event rows in bounded keyset batches. CSV exports stream event and aggregate rows in batches rather than silently stopping at a fixed 50,000-row cap.
+- Revenue is net of recorded full/partial WooCommerce refunds and shown separately by currency; refund/order hooks are idempotency-guarded. Validate gateway-specific refund flows in a staging WooCommerce install before production use.
+- Product reports compare view and add-to-cart event counts; funnel metrics are event counts, not unique-user conversion rates. WooCommerce status counts are cached briefly and may lag status changes by up to five minutes.
 - WordPress personal-data export/erasure also looks up WooCommerce orders by billing email, including guest orders, and handles their linked purchase analytics.
 - Run the smoke tests with `php tests/smoke.php`, `node tests/tracker-smoke.js`, and `node tests/basic-tracker-smoke.js`.
 - License: GPL-2.0-or-later.

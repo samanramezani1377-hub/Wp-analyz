@@ -14,7 +14,6 @@
   }
   if (explicitlyDenied()) return;
 
-  var sent = Object.create(null);
   var observedMetrics = Object.create(null);
   function uuid() {
     if (window.crypto && typeof window.crypto.randomUUID === 'function') return window.crypto.randomUUID();
@@ -58,7 +57,7 @@
       url: safePageUrl(),
       device: deviceType(),
       browser: browserFamily(),
-      object_id: (eventName === 'product_view' || eventName === 'category_view') ? (Number(objectId) || 0) : 0
+      object_id: (eventName === 'product_view' || eventName === 'category_view' || eventName === 'add_to_cart' || eventName === 'remove_from_cart') ? (Number(objectId) || 0) : 0
     };
     if (eventName === 'web_vital') {
       payload.data = { metric: String(data.metric).slice(0, 80), metric_value: String(Math.max(0, Number(data.metric_value))).slice(0, 40) };
@@ -123,13 +122,21 @@
   }
 
   var scrollDepth = 0;
-  window.addEventListener('scroll', function () {
+  var scrollPending = false;
+  function recordScrollDepth() {
+    scrollPending = false;
     var maxScroll = Math.max(1, document.documentElement.scrollHeight - window.innerHeight);
     var depth = Math.min(100, Math.floor((window.scrollY / maxScroll) * 4) * 25);
     if (depth >= 25 && depth > scrollDepth) {
       scrollDepth = depth;
       post('scroll_depth');
     }
+  }
+  window.addEventListener('scroll', function () {
+    if (scrollPending) return;
+    scrollPending = true;
+    if (typeof window.requestAnimationFrame === 'function') window.requestAnimationFrame(recordScrollDepth);
+    else recordScrollDepth();
   }, { passive: true });
 
   document.addEventListener('click', function (event) {
@@ -141,8 +148,8 @@
         if (link.origin !== window.location.origin && /^https?:$/.test(link.protocol)) post('outbound_click');
       } catch (e) {}
     }
-    if (target.matches('.add_to_cart_button,.single_add_to_cart_button,[name="add-to-cart"]')) post('add_to_cart');
-    if (target.matches('.remove_from_cart_button,a.remove')) post('remove_from_cart');
+    if (target.matches('.add_to_cart_button,.single_add_to_cart_button,[name="add-to-cart"]')) post('add_to_cart', null, target.getAttribute('data-product_id') || target.value || config.productId || 0);
+    if (target.matches('.remove_from_cart_button,a.remove')) post('remove_from_cart', null, target.getAttribute('data-product_id') || 0);
     if (target.matches('#place_order,button[name="woocommerce_checkout_place_order"]')) post('begin_checkout');
   }, true);
 
