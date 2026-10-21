@@ -23,7 +23,9 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '20'
-      - name: JavaScript syntax check
-        run: node --check assets/js/tracker.js
-      - name: Tracker smoke tests
+      - name: JavaScript syntax checks
+        run: node --check assets/js/tracker.js && node --check assets/js/tracker-basic.js
+      - name: Advanced tracker smoke tests
         run: node tests/tracker-smoke.js
+      - name: Aggregate-only tracker smoke tests
+        run: node tests/basic-tracker-smoke.js
