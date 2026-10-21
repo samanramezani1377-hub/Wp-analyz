@@ -72,6 +72,9 @@ check(strpos($plugin, "'date_created'=>'<'.\$cutoff_datetime") !== false && strp
 check(strpos($plugin, "'billing_email'=>sanitize_email(\$email)") !== false, 'privacy exporter and eraser can locate guest orders by billing email');
 check(strpos($plugin, 'wpa_each_event_data_row') !== false && strpos($plugin, 'wpa_event_data_rows') === false, 'campaign, search, and performance reports iterate through all matching event rows in batches');
 check(strpos($plugin, 'wpa_increment_aggregate($name') !== false, 'baseline browser events update daily aggregate counters instead of event rows');
+check(strpos($plugin, 'wpa_advanced_tracking_disabled') !== false, 'server rejects advanced events while consent mode is disabled');
+check(strpos($plugin, 'assets/js/tracker-basic.js') !== false && strpos($plugin, 'assets/js/tracker.js') !== false, 'front end selects a separate tracker for each consent mode');
+check(strpos($plugin, "'scroll_depth','outbound_click','add_to_cart'") !== false, 'aggregate-only mode supports limited interaction counts without visitor IDs');
 check(strpos($plugin, 'strlen((string)$body)>8192') !== false, 'rejects oversized event payloads');
 check(strpos($plugin, 'wpa_csv_safe') !== false, 'CSV export has spreadsheet-formula mitigation');
 $tracker = file_get_contents(dirname(__DIR__) . '/assets/js/tracker.js');
