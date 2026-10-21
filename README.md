@@ -4,7 +4,7 @@ WP Analyz is a self-hosted analytics plugin for WordPress and WooCommerce. Event
 
 ## Features
 
-- Two front-end modes: consent-enabled advanced tracking, or a separate lightweight aggregate-only tracker when consent mode is disabled.
+- Two front-end modes: consent-enabled advanced tracking, or a separate lightweight aggregate-only tracker when consent mode is disabled. New installations default to aggregate-only mode; advanced tracking is off until an administrator enables consent mode.
 - Aggregate-only mode records page/product/category views, search-result counts (not terms), coarse device/browser classes, scroll/click/cart/checkout/form/error event counts, performance metrics, and aggregate WooCommerce sales without visitor/session IDs, analytics cookies, browser storage, page titles, referrers, search terms, or UTM values.
 - Deferred first-party advanced tracker for page views, product/category views, search-result views, scroll depth, outbound clicks, add/remove-to-cart clicks, checkout-button clicks, basic form events, JavaScript errors, TTFB, LCP, CLS, and a clearly labeled interaction-latency estimate.
 - Dashboard for consented visitors/sessions, page views, events, purchases, popular pages, referrer hosts, devices, UTM campaigns, search terms, performance metrics, daily trends, custom date ranges, and previous-period comparisons.
