@@ -34,11 +34,13 @@ The plugin does not display a consent banner itself.
 - LCP and CLS are collected where browser APIs support them. Interaction latency is a lightweight estimate, not a standards-complete INP measurement.
 - IP is used transiently for rate limiting and is not saved in event rows. Public collection endpoints can still receive fabricated traffic; use a WAF/rate limits and monitor anomalies.
 - This is a technical tool, not legal advice or a guarantee of GDPR/ePrivacy compliance.
-- Analytics history is preserved by default on uninstall. To delete the table during uninstall, define `WPA_DELETE_DATA_ON_UNINSTALL` as true in `wp-config.php` before deleting the plugin.
+- Analytics event rows, daily aggregates, and WooCommerce analytics-context metadata are cleaned according to the configured retention period (daily cleanup processes bounded batches). Analytics history is preserved by default on uninstall. To delete the analytics tables during uninstall, define `WPA_DELETE_DATA_ON_UNINSTALL` as true in `wp-config.php` before deleting the plugin.
 
 ## Developer notes
 
 - Event endpoint: `POST /wp-json/wp-analyz/v1/event`
 - Purchase is accepted only from server-side WooCommerce hooks, never from public browser submissions.
+- Campaign, search-term, and performance summaries scan matching event rows in bounded keyset batches rather than silently stopping at the first 5,000 rows.
+- WordPress personal-data export/erasure also looks up WooCommerce orders by billing email, including guest orders, and handles their linked purchase analytics.
 - Run the smoke tests with `php tests/smoke.php` and `node tests/tracker-smoke.js`.
 - License: GPL-2.0-or-later.
