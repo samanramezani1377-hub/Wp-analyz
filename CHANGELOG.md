@@ -1,7 +1,7 @@
 ## 1.4.0
 
 - Added custom date-range filters and previous-period comparisons for event, page-view, and purchase counts.
-- Added product-view versus add-to-cart reporting, event-count funnel reporting, and cached WooCommerce order-status counts.
+- Added product-view versus add-to-cart reporting, WooCommerce product units sold when lookup tables are available, event-count funnel reporting, and cached WooCommerce order-status counts.
 - Separated revenue by currency and added idempotent WooCommerce purchase markers to avoid counting one order multiple times across status hooks.
 - Added full/partial refund events that reduce net revenue by currency, with duplicate-refund protection and retention cleanup of analytics metadata.
 - Added a composite index for bounded event-data report scans and upper-bound date filtering for dashboard and CSV reports.
