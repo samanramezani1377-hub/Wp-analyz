@@ -17,7 +17,7 @@ WP Analyz is a self-hosted analytics plugin for WordPress and WooCommerce. Event
 1. Upload the `wp-analyz` folder to `/wp-content/plugins/`, or upload the ZIP from **WordPress Admin → Plugins → Add New Plugin → Upload Plugin**.
 2. Activate **WP Analyz – Private Analytics**.
 3. Open **WP Analyz** in the WordPress admin menu and review its settings.
-4. The consent mode is enabled by default. With it enabled, aggregate baseline counts can run before consent (if enabled), while advanced tracking waits for your consent manager. Turning consent mode off switches to a separate aggregate-only tracker and does not load the advanced tracker or its consent API. The plugin itself never displays a consent banner. Connect your existing consent manager only when consent mode is enabled:
+4. The consent mode is enabled by default. With it enabled, aggregate baseline counts can run before consent (if enabled), while advanced tracking waits for your consent manager. Turning consent mode off switches to a separate aggregate-only tracker and does not load the advanced tracker or its consent API. The plugin itself never displays a consent banner, and this setting does not hide or disable banners provided by other plugins. Connect your existing consent manager only when consent mode is enabled:
 
 ```js
 window.wpAnalyzConsent('granted'); // after consent
