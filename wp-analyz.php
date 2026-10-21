@@ -322,11 +322,23 @@ function wpa_product_activity_report($since,$until,$aggregate_since,$aggregate_u
  $cache_key='wpa_products_'.md5($since.'|'.substr((string)$until,0,16).'|'.$aggregate_since.'|'.$aggregate_until.'|'.$limit);$cached=get_transient($cache_key);if(is_array($cached))return $cached;
  global $wpdb;$counts=array();
  $events=$wpdb->get_results($wpdb->prepare('SELECT object_id,event_name,COUNT(*) total FROM '.wpa_table().' WHERE created_at >= %s AND created_at < %s AND object_id > 0 AND event_name IN (%s,%s) GROUP BY object_id,event_name',$since,$until,'product_view','add_to_cart'),ARRAY_A);
- foreach((array)$events as $r){$id=(int)$r['object_id'];$k=$r['event_name']==='product_view'?'views':'carts';if(!isset($counts[$id]))$counts[$id]=array('views'=>0,'carts'=>0);$counts[$id][$k]+=(int)$r['total'];}
+ foreach((array)$events as $r){$id=(int)$r['object_id'];$k=$r['event_name']==='product_view'?'views':'carts';if(!isset($counts[$id]))$counts[$id]=array('views'=>0,'carts'=>0,'sold'=>0);$counts[$id][$k]+=(int)$r['total'];}
  $agg=$wpdb->get_results($wpdb->prepare('SELECT object_id,event_name,SUM(event_count) total FROM '.wpa_aggregate_table().' WHERE day >= %s AND day < %s AND object_id > 0 AND event_name IN (%s,%s) GROUP BY object_id,event_name',$aggregate_since,$aggregate_until,'product_view','add_to_cart'),ARRAY_A);
- foreach((array)$agg as $r){$id=(int)$r['object_id'];$k=$r['event_name']==='product_view'?'views':'carts';if(!isset($counts[$id]))$counts[$id]=array('views'=>0,'carts'=>0);$counts[$id][$k]+=(int)$r['total'];}
- uasort($counts,function($a,$b){return ($b['views']+$b['carts']*2)<=>($a['views']+$a['carts']*2);});$out=array();
- foreach(array_slice($counts,0,max(1,(int)$limit),true) as $id=>$c){$title=function_exists('get_the_title')?get_the_title((int)$id):'';$out[]=array('label'=>($title?$title:'محصول #'.(int)$id).' — بازدید: '.$c['views'].' / افزودن به سبد: '.$c['carts'],'total'=>(int)$c['views']);}set_transient($cache_key,$out,MINUTE_IN_SECONDS);return $out;
+ foreach((array)$agg as $r){$id=(int)$r['object_id'];$k=$r['event_name']==='product_view'?'views':'carts';if(!isset($counts[$id]))$counts[$id]=array('views'=>0,'carts'=>0,'sold'=>0);$counts[$id][$k]+=(int)$r['total'];}
+ $sales_available=false;$lookup=$wpdb->prefix.'wc_order_product_lookup';$stats=$wpdb->prefix.'wc_order_stats';
+ if($wpdb->get_var($wpdb->prepare('SHOW TABLES LIKE %s',$lookup))===$lookup && $wpdb->get_var($wpdb->prepare('SHOW TABLES LIKE %s',$stats))===$stats){
+  $sales_available=true;
+  $sales=$wpdb->get_results($wpdb->prepare("SELECT p.product_id,SUM(p.product_qty) total FROM {$lookup} p INNER JOIN {$stats} s ON s.order_id=p.order_id WHERE s.date_created >= %s AND s.date_created < %s AND s.status IN (%s,%s) GROUP BY p.product_id",$since,$until,'wc-processing','wc-completed'),ARRAY_A);
+  foreach((array)$sales as $r){$id=(int)$r['product_id'];if(!$id)continue;if(!isset($counts[$id]))$counts[$id]=array('views'=>0,'carts'=>0,'sold'=>0);$counts[$id]['sold']+=(int)$r['total'];}
+ }
+ uasort($counts,function($a,$b){return ($b['views']+$b['carts']*2+$b['sold']*3)<=>($a['views']+$a['carts']*2+$a['sold']*3);});$out=array();
+ foreach(array_slice($counts,0,max(1,(int)$limit),true) as $id=>$c){
+  $title=function_exists('get_the_title')?get_the_title((int)$id):'';
+  $label=($title?$title:'محصول #'.(int)$id).' — بازدید: '.$c['views'].' / افزودن به سبد: '.$c['carts'];
+  if($sales_available)$label.=' / فروش ثبت‌شده: '.$c['sold'].' واحد';
+  $out[]=array('label'=>$label,'total'=>(int)$c['views']);
+ }
+ set_transient($cache_key,$out,MINUTE_IN_SECONDS);return $out;
 }
 function wpa_funnel_event_counts($since,$until,$aggregate_since,$aggregate_until) {
  $cache_key='wpa_funnel_'.md5($since.'|'.substr((string)$until,0,16).'|'.$aggregate_since.'|'.$aggregate_until);$cached=get_transient($cache_key);if(is_array($cached))return $cached;
