@@ -112,7 +112,7 @@ function wpa_public_event(WP_REST_Request $r){
  $s=wpa_settings();if(empty($s['enabled']))return new WP_Error('wpa_disabled','Analytics collection is disabled.',array('status'=>403));
  $ip=isset($_SERVER['REMOTE_ADDR'])?sanitize_text_field(wp_unslash($_SERVER['REMOTE_ADDR'])):'';$rk='wpa_rate_'.hash('sha256',wp_salt('auth').$ip);$n=(int)get_transient($rk);$limit=max(10,min(300,(int)$s['per_minute_limit']));if($n >= $limit)return new WP_Error('wpa_rate_limited','Too many events.',array('status'=>429));set_transient($rk,$n+1,MINUTE_IN_SECONDS);
  $body=$r->get_body();if(strlen((string)$body)>8192)return new WP_Error('wpa_payload_too_large','Event payload is too large.',array('status'=>413));$d=$r->get_json_params();if(!is_array($d))return new WP_Error('wpa_invalid_payload','Invalid payload.',array('status'=>400));$allowed=array('page_view','product_view','category_view','search','add_to_cart','remove_from_cart','begin_checkout','form_submit','outbound_click','login','sign_up','scroll_depth','web_vital','js_error');$name=isset($d['event'])?sanitize_key($d['event']):'';if(!in_array($name,$allowed,true))return new WP_Error('wpa_invalid_event','Unsupported event.',array('status'=>400));
- $aggregate=!empty($s['baseline_analytics'])&&isset($d['mode'])&&'aggregate'===$d['mode'];$baseline_allowed=array('page_view','product_view','category_view','web_vital','search','scroll_depth','outbound_click','add_to_cart','remove_from_cart','begin_checkout','form_submit','js_error');if($aggregate&&!in_array($name,$baseline_allowed,true))return new WP_Error('wpa_baseline_event_forbidden','Event is not available in aggregate mode.',array('status'=>403));
+ $aggregate=!empty($s['baseline_analytics'])&&isset($d['mode'])&&'aggregate'===$d['mode'];$baseline_allowed=!empty($s['require_consent'])?array('page_view','product_view','category_view','web_vital'):array('page_view','product_view','category_view','web_vital','search','scroll_depth','outbound_click','add_to_cart','remove_from_cart','begin_checkout','form_submit','js_error');if(empty($s['require_consent'])&&!$aggregate)return new WP_Error('wpa_advanced_tracking_disabled','Advanced tracking is disabled while consent mode is off.',array('status'=>403));if($aggregate&&!in_array($name,$baseline_allowed,true))return new WP_Error('wpa_baseline_event_forbidden','Event is not available in aggregate mode.',array('status'=>403));
  $eid=wpa_uuid($d['event_id']??'');if(!$eid)return new WP_Error('wpa_invalid_id','Invalid event identifier.',array('status'=>400));$vid=$aggregate?'':wpa_uuid($d['visitor_id']??'');$sid=$aggregate?'':wpa_uuid($d['session_id']??'');if(!$aggregate&&(!$vid||!$sid))return new WP_Error('wpa_invalid_id','Invalid event identifiers.',array('status'=>400));$path=wpa_clean_path($d['url']??'');if(false===$path)return new WP_Error('wpa_invalid_url','Invalid page URL.',array('status'=>400));
  $ref='';if(!$aggregate){$refurl=esc_url_raw((string)($d['referrer']??''),array('http','https'));$rp=$refurl?wp_parse_url($refurl):false;$hp=wp_parse_url(home_url('/'));if(!empty($rp['host'])&&!empty($hp['host'])&&strtolower($rp['host'])!==strtolower($hp['host']))$ref=substr(sanitize_text_field(strtolower($rp['host'])),0,190);}
  $device=in_array(($d['device']??''),array('desktop','mobile','tablet','unknown'),true)?$d['device']:'unknown';$browser=in_array(($d['browser']??''),array('chrome','firefox','safari','edge','other','unknown'),true)?$d['browser']:'unknown';$title=$aggregate?'':substr(sanitize_text_field($d['title']??''),0,255);$object=in_array($name,array('product_view','category_view'),true)?absint($d['object_id']??0):0;$value=(!$aggregate&&is_numeric($d['value']??null))?max(0,min(999999999,(float)$d['value'])):0;$currency=(!$aggregate)?substr(preg_replace('/[^A-Z]/','',strtoupper(sanitize_text_field($d['currency']??''))),0,3):'';
@@ -147,8 +147,7 @@ function wpa_capture_order_analytics_context($order, $save = false) {
   if ($save && method_exists($order, 'save')) $order->save();
   return;
  }
- if (!empty($settings['require_consent']) && 'granted' !== $status) return;
- if (empty($settings['require_consent']) && !in_array($status, array('active', 'granted'), true)) return;
+ if (empty($settings['require_consent']) || 'granted' !== $status) return;
  $visitor = wpa_uuid(isset($_COOKIE['wpa_visitor_id']) ? wp_unslash($_COOKIE['wpa_visitor_id']) : '');
  $session = wpa_uuid(isset($_COOKIE['wpa_session_id']) ? wp_unslash($_COOKIE['wpa_session_id']) : '');
  if (!$visitor || !$session) return;
@@ -166,7 +165,7 @@ function wpa_record_purchase($order_id) {
  if (!$order || !$order->is_paid()) return;
  $consent_state = (string) $order->get_meta('_wpa_analytics_consent', true);
  if ('denied' === $consent_state) return;
- $consented = 'granted' === $consent_state;
+ $consented = !empty($settings['require_consent']) && 'granted' === $consent_state;
  $seed = (int) $order_id;
  $visitor = $consented ? wpa_uuid($order->get_meta('_wpa_visitor_id', true)) : false;
  $session = $consented ? wpa_uuid($order->get_meta('_wpa_session_id', true)) : false;
