@@ -49,6 +49,17 @@ async function runTracker(cookie) {
 (async function () {
   const run = await runTracker('');
   assert.strictEqual(run.events.length, 3, 'records aggregate page, product, and search-result counts');
+  const clickTarget = {
+    matches: (selector) => selector.indexOf('add_to_cart_button') !== -1,
+    getAttribute: (name) => name === 'data-product_id' ? '42' : null,
+    value: '',
+    closest: function () { return this; }
+  };
+  run.documentListeners.click[0]({ target: clickTarget });
+  assert.strictEqual(run.events.length, 4, 'records aggregate add-to-cart interaction');
+  const cartPayload = JSON.parse(await run.events[3].blob.text());
+  assert.strictEqual(cartPayload.event, 'add_to_cart', 'cart event is recorded');
+  assert.strictEqual(cartPayload.object_id, 42, 'cart event is attributed to the product without a visitor ID');
   assert.strictEqual(run.cookieWrites.length, 0, 'does not write cookies');
   assert.strictEqual(typeof run.window.wpAnalyzConsent, 'undefined', 'does not expose the advanced consent API');
   const payloads = await Promise.all(run.events.map(async (event) => JSON.parse(await event.blob.text())));
