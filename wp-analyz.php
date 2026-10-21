@@ -2,7 +2,7 @@
 /**
  * Plugin Name: WP Analyz – Private Analytics
  * Description: Self-hosted privacy-first analytics for WordPress and WooCommerce. No Google tags or third-party analytics requests.
- * Version: 1.4.0
+ * Version: 1.4.1
  * Requires at least: 6.3
  * Requires PHP: 7.4
  * Author: WP Analyz
@@ -10,7 +10,7 @@
  * Text Domain: wp-analyz
  */
 defined('ABSPATH') || exit;
-define('WPA_VERSION','1.4.0');
+define('WPA_VERSION','1.4.1');
 define('WPA_TABLE','wpa_events');
 function wpa_table(){ global $wpdb; return $wpdb->prefix . WPA_TABLE; }
 function wpa_aggregate_table(){ global $wpdb; return $wpdb->prefix . 'wpa_aggregates'; }
