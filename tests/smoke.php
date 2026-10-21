@@ -81,6 +81,13 @@ check(strpos($plugin, 'wpa_record_refund') !== false, 'WooCommerce refunds are r
 check(strpos($plugin, '_wpa_analytics_purchase_recorded') !== false, 'WooCommerce purchase hooks have an idempotency marker');
 check(strpos($plugin, 'created_at < %s') !== false, 'reports can apply an exclusive upper date bound');
 check(strpos($plugin, 'KEY event_name_created_id (event_name,created_at,id)') !== false, 'event report scans have a supporting composite index');
+$uninstall = file_get_contents(dirname(__DIR__) . '/uninstall.php');
+check(strpos($uninstall, 'WP_UNINSTALL_PLUGIN') !== false, 'uninstall runs only through WordPress plugin deletion');
+check(strpos($uninstall, 'DROP TABLE IF EXISTS') !== false && strpos($uninstall, 'wpa_aggregates') !== false, 'uninstall drops both WP Analyz analytics tables');
+check(strpos($uninstall, "delete_option('wpa_settings')") !== false && strpos($uninstall, "delete_option('wpa_db_version')") !== false, 'uninstall removes plugin settings and database version');
+check(strpos($uninstall, 'wc_orders_meta') !== false && strpos($uninstall, '_wpa_analytics_refund_ids') !== false, 'uninstall removes WP Analyz order metadata from HPOS and legacy storage');
+check(strpos($uninstall, 'WPA_DELETE_DATA_ON_UNINSTALL') === false, 'uninstall cleanup is not gated behind an opt-in constant');
+
 
 check(strpos($plugin, 'assets/js/tracker-basic.js') !== false && strpos($plugin, 'assets/js/tracker.js') !== false, 'front end selects a separate tracker for each consent mode');
 check(strpos($plugin, "'scroll_depth','outbound_click','add_to_cart'") !== false, 'aggregate-only mode supports limited interaction counts without visitor IDs');
