@@ -1,4 +1,12 @@
-## 1.3.0
+## 1.4.0
+
+- Added custom date-range filters and previous-period comparisons for event, page-view, and purchase counts.
+- Added product-view versus add-to-cart reporting, event-count funnel reporting, and cached WooCommerce order-status counts.
+- Separated revenue by currency and added idempotent WooCommerce purchase markers to avoid counting one order multiple times across status hooks.
+- Added full/partial refund events that reduce net revenue by currency, with duplicate-refund protection and retention cleanup of analytics metadata.
+- Added a composite index for bounded event-data report scans and upper-bound date filtering for dashboard and CSV reports.
+- Throttled scroll-depth measurement to animation frames and attributed cart interactions to product IDs without adding visitor IDs in aggregate-only mode.
+- Bumped plugin version to 1.4.0 and expanded smoke tests.
 
 - Added a consent-mode setting: enabled mode retains the consent-gated advanced tracker; disabled mode loads only the aggregate-only tracker.
 - Aggregate-only mode never sets analytics cookies or uses local/session storage or visitor/session IDs, and omits page titles, referrers, search terms, and UTM values.
