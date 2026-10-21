@@ -89,11 +89,12 @@ add_action('wpa_daily_cleanup',function(){
     array('key'=>'_wpa_analytics_consent','compare'=>'EXISTS'),
     array('key'=>'_wpa_visitor_id','compare'=>'EXISTS'),
     array('key'=>'_wpa_session_id','compare'=>'EXISTS'),
-    array('key'=>'_wpa_analytics_purchase_recorded','compare'=>'EXISTS')
+    array('key'=>'_wpa_analytics_purchase_recorded','compare'=>'EXISTS'),
+    array('key'=>'_wpa_analytics_refund_ids','compare'=>'EXISTS')
    )
   ));
   foreach((array)$orders as $order){
-   foreach(array('_wpa_analytics_consent','_wpa_visitor_id','_wpa_session_id','_wpa_analytics_purchase_recorded') as $key)$order->delete_meta_data($key);
+   foreach(array('_wpa_analytics_consent','_wpa_visitor_id','_wpa_session_id','_wpa_analytics_purchase_recorded','_wpa_analytics_refund_ids') as $key)$order->delete_meta_data($key);
    $order->save();
   }
  }
@@ -201,6 +202,41 @@ function wpa_record_purchase($order_id) {
  $order->update_meta_data('_wpa_analytics_purchase_recorded', gmdate('c'));
  $order->save();
 }
+
+function wpa_record_refund($order_id,$refund_id) {
+ $settings=wpa_settings();
+ if(empty($settings['enabled'])||empty($settings['woocommerce'])||!function_exists('wc_get_order'))return;
+ $order=wc_get_order($order_id);$refund=wc_get_order($refund_id);
+ if(!$order||!$refund||!method_exists($refund,'get_amount'))return;
+ $consent_state=(string)$order->get_meta('_wpa_analytics_consent',true);
+ if('denied'===$consent_state)return;
+ $recorded=$order->get_meta('_wpa_analytics_refund_ids',true);
+ $recorded=is_array($recorded)?array_map('absint',$recorded):array();
+ $refund_id=absint($refund_id);if(!$refund_id||in_array($refund_id,$recorded,true))return;
+ $amount=abs((float)$refund->get_amount());if($amount<=0)return;
+ $currency=substr(sanitize_text_field($order->get_currency()),0,3);
+ $consented=!empty($settings['require_consent'])&&'granted'===$consent_state;
+ if(!$consented){
+  if(empty($settings['baseline_analytics']))return;
+  wpa_increment_aggregate('refund','/checkout/order-received/','unknown','unknown',0,'',$currency,1,-$amount,0,0);
+ }else{
+  wpa_insert_event(array(
+   'event_id'=>wpa_stable_uuid('refund:'.$refund_id),
+   'visitor_id'=>wpa_uuid($order->get_meta('_wpa_visitor_id',true))?:'',
+   'session_id'=>wpa_uuid($order->get_meta('_wpa_session_id',true))?:'',
+   'event_name'=>'refund','url_path'=>'/checkout/order-received/','referrer_host'=>'',
+   'page_title'=>'Refund','device_type'=>'unknown','browser_family'=>'unknown',
+   'user_id'=>(int)$order->get_customer_id(),'object_id'=>(int)$order_id,
+   'value_decimal'=>-$amount,'currency'=>$currency,
+   'event_data'=>wp_json_encode(array('refund_id'=>(string)$refund_id,'source'=>'woocommerce_server')),
+   'created_at'=>current_time('mysql',true)
+  ));
+ }
+ $recorded[]=$refund_id;$order->update_meta_data('_wpa_analytics_refund_ids',array_values(array_unique($recorded)));$order->save();
+}
+add_action('woocommerce_order_fully_refunded','wpa_record_refund',20,2);
+add_action('woocommerce_order_partially_refunded','wpa_record_refund',20,2);
+
 add_action('woocommerce_payment_complete','wpa_record_purchase',20,1);add_action('woocommerce_order_status_processing','wpa_record_purchase',20,1);add_action('woocommerce_order_status_completed','wpa_record_purchase',20,1);
 add_action('admin_menu',function(){add_menu_page('WP Analyz','WP Analyz','manage_options','wp-analyz','wpa_dashboard','dashicons-chart-area',58);add_submenu_page('wp-analyz','Settings','Settings','manage_options','wp-analyz-settings','wpa_settings_page');});
 add_action('admin_enqueue_scripts',function($hook){if(strpos((string)$hook,'wp-analyz')===false)return;wp_enqueue_style('wpa-admin',plugins_url('assets/css/admin.css',__FILE__),array(),WPA_VERSION);});
@@ -271,9 +307,9 @@ function wpa_csv_safe($value) {
 }
 function wpa_currency_revenue_report($since,$until,$aggregate_since,$aggregate_until) {
  global $wpdb;$rows=array();
- $events=$wpdb->get_results($wpdb->prepare('SELECT currency,COUNT(*) purchases,COALESCE(SUM(value_decimal),0) revenue FROM '.wpa_table().' WHERE created_at >= %s AND created_at < %s AND event_name = %s GROUP BY currency',$since,$until,'purchase'),ARRAY_A);
+ $events=$wpdb->get_results($wpdb->prepare('SELECT currency,SUM(CASE WHEN event_name = %s THEN 1 ELSE 0 END) purchases,COALESCE(SUM(value_decimal),0) revenue FROM '.wpa_table().' WHERE created_at >= %s AND created_at < %s AND event_name IN (%s,%s) GROUP BY currency','purchase',$since,$until,'purchase','refund'),ARRAY_A);
  foreach((array)$events as $r){$c=$r['currency']!==''?$r['currency']:'نامشخص';if(!isset($rows[$c]))$rows[$c]=array('label'=>$c,'total'=>0,'purchases'=>0);$rows[$c]['total']+=(float)$r['revenue'];$rows[$c]['purchases']+=(int)$r['purchases'];}
- $agg=$wpdb->get_results($wpdb->prepare('SELECT currency,SUM(event_count) purchases,COALESCE(SUM(value_sum),0) revenue FROM '.wpa_aggregate_table().' WHERE day >= %s AND day < %s AND event_name = %s GROUP BY currency',$aggregate_since,$aggregate_until,'purchase'),ARRAY_A);
+ $agg=$wpdb->get_results($wpdb->prepare('SELECT currency,SUM(CASE WHEN event_name = %s THEN event_count ELSE 0 END) purchases,COALESCE(SUM(value_sum),0) revenue FROM '.wpa_aggregate_table().' WHERE day >= %s AND day < %s AND event_name IN (%s,%s) GROUP BY currency','purchase',$aggregate_since,$aggregate_until,'purchase','refund'),ARRAY_A);
  foreach((array)$agg as $r){$c=$r['currency']!==''?$r['currency']:'نامشخص';if(!isset($rows[$c]))$rows[$c]=array('label'=>$c,'total'=>0,'purchases'=>0);$rows[$c]['total']+=(float)$r['revenue'];$rows[$c]['purchases']+=(int)$r['purchases'];}
  usort($rows,function($a,$b){return strcmp($a['label'],$b['label']);});return $rows;
 }
