@@ -4,7 +4,9 @@ WP Analyz is a self-hosted analytics plugin for WordPress and WooCommerce. Event
 
 ## Features
 
-- Deferred first-party tracker for page views, product/category views, search-result views, scroll depth, outbound clicks, add/remove-to-cart clicks, checkout-button clicks, basic form events, JavaScript errors, TTFB, LCP, CLS, and a clearly labeled interaction-latency estimate.
+- Two front-end modes: consent-enabled advanced tracking, or a separate lightweight aggregate-only tracker when consent mode is disabled.
+- Aggregate-only mode records page/product/category views, search-result counts (not terms), coarse device/browser classes, scroll/click/cart/checkout/form/error event counts, performance metrics, and aggregate WooCommerce sales without visitor/session IDs, analytics cookies, browser storage, page titles, referrers, search terms, or UTM values.
+- Deferred first-party advanced tracker for page views, product/category views, search-result views, scroll depth, outbound clicks, add/remove-to-cart clicks, checkout-button clicks, basic form events, JavaScript errors, TTFB, LCP, CLS, and a clearly labeled interaction-latency estimate.
 - Dashboard for visitors, sessions, page views, events, purchases, revenue, popular pages, referrer hosts, devices, UTM campaigns, search terms, performance metric summaries, and daily summaries.
 - WooCommerce server-side purchase events with deterministic event IDs to prevent duplicate order counts. After consent, first-party session cookies can associate classic and Store API checkout orders with the browser session where supported.
 - Consent gate enabled by default, session-only visitor IDs by default, optional persistent visitor IDs, configurable retention, CSV export with spreadsheet-formula mitigation, and WordPress personal-data exporter/eraser hooks.
@@ -15,7 +17,7 @@ WP Analyz is a self-hosted analytics plugin for WordPress and WooCommerce. Event
 1. Upload the `wp-analyz` folder to `/wp-content/plugins/`, or upload the ZIP from **WordPress Admin → Plugins → Add New Plugin → Upload Plugin**.
 2. Activate **WP Analyz – Private Analytics**.
 3. Open **WP Analyz** in the WordPress admin menu and review its settings.
-4. Aggregate baseline counts are enabled by default. Advanced tracking requires consent by default. Connect your existing consent manager:
+4. The consent mode is enabled by default. With it enabled, aggregate baseline counts can run before consent (if enabled), while advanced tracking waits for your consent manager. Turning consent mode off switches to a separate aggregate-only tracker and does not load the advanced tracker or its consent API. The plugin itself never displays a consent banner, and this setting does not hide or disable banners provided by other plugins. Connect your existing consent manager only when consent mode is enabled:
 
 ```js
 window.wpAnalyzConsent('granted'); // after consent
@@ -26,9 +28,10 @@ The plugin does not display a consent banner itself.
 
 ## Privacy and limitations
 
-- Before consent, baseline mode records page views, product/category views, coarse device/browser classes, and performance metrics only. These are stored as daily grouped counters by page path and coarse device/browser class, with no per-event timestamp or visitor/session ID. No page title, referrer, search term, UTM value, or interaction event is sent in baseline mode. It does not use analytics cookies, localStorage, or sessionStorage. An essential `wpa_consent=denied` preference cookie is kept after rejection so baseline events stop on subsequent pages. After consent, advanced tracking may use `wpa_consent`, `wpa_visitor_id`, and `wpa_session_id` cookies to associate WooCommerce orders with sessions.
+- With consent mode enabled, baseline mode records page views, product/category views, coarse device/browser classes, and performance metrics before consent; these are daily grouped counters without visitor/session IDs. It does not use analytics cookies, localStorage, or sessionStorage. An essential `wpa_consent=denied` preference cookie is kept after rejection so baseline events stop on subsequent pages.
+- With consent mode disabled, only `assets/js/tracker-basic.js` is enqueued on the front end (plus the small inline configuration needed to provide the endpoint and current product/category IDs). The advanced `assets/js/tracker.js` and its `window.wpAnalyzConsent` API are not loaded. Aggregate-only mode adds counts for search-result pages and limited interactions, but does not collect search terms, UTM values, page titles, referrers, or visitor/session histories. It does not set cookies or access browser storage and respects an existing explicit `wpa_consent=denied` cookie. After consent, advanced tracking may use `wpa_consent`, `wpa_visitor_id`, and `wpa_session_id` cookies to associate WooCommerce orders with sessions.
 - The default visitor ID is held in `sessionStorage`; it does not reliably identify returning visitors across browser sessions. Persistent IDs use `localStorage` and may require consent.
-- Baseline counters are grouped by day and page/device/performance dimensions, but may still constitute personal data depending on context. They require an appropriate legal basis and transparent disclosure; absence of analytics cookies or visitor IDs does not automatically exempt processing from GDPR/ePrivacy rules. Enable it only after reviewing the laws applicable to your site and users. The plugin does not make a site legally compliant by itself.
+- Aggregate-only counters are grouped by day, event, path, coarse device/browser class, and (for product/category views) object ID. They may still constitute personal data depending on context. They require an appropriate legal basis and transparent disclosure; absence of analytics cookies or visitor IDs does not automatically exempt processing from applicable rules. The plugin does not make a site legally compliant by itself.
 - After consent, search terms and UTM campaign values are stored in event data and can contain personal information. Avoid collecting sensitive terms and review your privacy notice.
 - Query strings and full referrer URLs are discarded. The plugin stores page paths, external referrer hostnames, and allowlisted UTM source/medium/campaign values.
 - LCP and CLS are collected where browser APIs support them. Interaction latency is a lightweight estimate, not a standards-complete INP measurement.
@@ -42,5 +45,5 @@ The plugin does not display a consent banner itself.
 - Purchase is accepted only from server-side WooCommerce hooks, never from public browser submissions.
 - Campaign, search-term, and performance summaries scan matching event rows in bounded keyset batches rather than silently stopping at the first 5,000 rows.
 - WordPress personal-data export/erasure also looks up WooCommerce orders by billing email, including guest orders, and handles their linked purchase analytics.
-- Run the smoke tests with `php tests/smoke.php` and `node tests/tracker-smoke.js`.
+- Run the smoke tests with `php tests/smoke.php`, `node tests/tracker-smoke.js`, and `node tests/basic-tracker-smoke.js`.
 - License: GPL-2.0-or-later.
