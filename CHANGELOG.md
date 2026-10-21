@@ -1,3 +1,11 @@
+## 1.3.0
+
+- Added a consent-mode setting: enabled mode retains the consent-gated advanced tracker; disabled mode loads only the aggregate-only tracker.
+- Aggregate-only mode never sets analytics cookies or uses local/session storage or visitor/session IDs, and omits page titles, referrers, search terms, and UTM values.
+- Added aggregate counts for search-result pages and limited interaction events without per-visitor attribution.
+- When consent mode is disabled, the advanced tracker and its consent API are not enqueued on the public front end; if aggregate analytics are also disabled, no analytics tracker is loaded.
+- Expanded CI smoke tests for aggregate-only mode.
+
 ## 1.2.1
 
 - Respect the global analytics-enabled switch in WooCommerce purchase recording.
