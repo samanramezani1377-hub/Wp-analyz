@@ -299,6 +299,20 @@ function wpa_period_summary($since,$until,$aggregate_since,$aggregate_until) {
  $agg=$wpdb->get_row($wpdb->prepare('SELECT COALESCE(SUM(event_count),0) events,COALESCE(SUM(CASE WHEN event_name=%s THEN event_count ELSE 0 END),0) pageviews,COALESCE(SUM(CASE WHEN event_name=%s THEN event_count ELSE 0 END),0) purchases FROM '.wpa_aggregate_table().' WHERE day >= %s AND day < %s','page_view','purchase',$aggregate_since,$aggregate_until),ARRAY_A);
  foreach(array('events','pageviews','purchases') as $k)$events[$k]=(int)$events[$k]+(int)$agg[$k];return $events;
 }
+function wpa_woocommerce_status_report($from,$to) {
+ if(!function_exists('wc_get_orders'))return array();
+ $key='wpa_wc_status_'.md5($from.'|'.$to);
+ $cached=get_transient($key);if(is_array($cached))return $cached;
+ $statuses=array('wc-processing'=>'در حال پردازش','wc-completed'=>'تکمیل‌شده','wc-on-hold'=>'در انتظار','wc-pending'=>'در انتظار پرداخت','wc-failed'=>'ناموفق','wc-cancelled'=>'لغوشده','wc-refunded'=>'مرجوع‌شده');
+ $rows=array();$range=$from.'...'.$to;
+ foreach($statuses as $status=>$label){
+  $result=wc_get_orders(array('status'=>array($status),'limit'=>1,'paginate'=>true,'return'=>'ids','date_created'=>$range,'orderby'=>'date','order'=>'DESC'));
+  $total=is_object($result)&&isset($result->total)?(int)$result->total:0;
+  $rows[]=array('label'=>$label,'total'=>$total);
+ }
+ set_transient($key,$rows,5*MINUTE_IN_SECONDS);
+ return $rows;
+}
 function wpa_dashboard(){
  if(!current_user_can('manage_options'))wp_die('Forbidden');global $wpdb;
  $days=isset($_GET['days'])&&in_array(absint($_GET['days']),array(7,30,90),true)?absint($_GET['days']):7;
@@ -315,6 +329,7 @@ $t=wpa_table();$tot=$wpdb->get_row($wpdb->prepare("SELECT COUNT(*) events,COUNT(
  wpa_render_table('درآمد به تفکیک ارز (ارزها با هم جمع نشده‌اند)',$currency_rows);
  wpa_render_table('عملکرد محصولات (بازدید و افزودن به سبد)',wpa_product_activity_report($since,$until,$agg_since,$agg_until,10));
  wpa_render_table('مراحل خرید — تعداد رویدادها، نه کاربران یکتا',wpa_funnel_event_counts($since,$until,$agg_since,$agg_until));
+ wpa_render_table('وضعیت سفارش‌های WooCommerce (بر اساس تاریخ ایجاد سفارش)',wpa_woocommerce_status_report($from,$to));
  $current_summary=wpa_period_summary($since,$until,$agg_since,$agg_until);$previous_summary=wpa_period_summary($previous_since,$previous_until,$previous_agg_since,$previous_agg_until);
  echo '<section class="wpa-panel"><h2>مقایسه با بازهٔ قبلی هم‌طول</h2><p>بازدید صفحه: '.esc_html(number_format_i18n($current_summary['pageviews'])).' در برابر '.esc_html(number_format_i18n($previous_summary['pageviews'])).'؛ خرید: '.esc_html(number_format_i18n($current_summary['purchases'])).' در برابر '.esc_html(number_format_i18n($previous_summary['purchases'])).'؛ رویدادها: '.esc_html(number_format_i18n($current_summary['events'])).' در برابر '.esc_html(number_format_i18n($previous_summary['events'])).'.</p></section>';
  echo '<section class="wpa-panel"><h2>روند روزانه</h2>';if(!$daily)echo '<p>هنوز داده‌ای ثبت نشده است. اگر رضایت کاربر فعال است، بنر رضایت را به تابع WP Analyz متصل کنید.</p>';else foreach($daily as $r)echo '<p>'.esc_html($r['day']).' — بازدید: '.esc_html((int)$r['pageviews']).'، نشست: '.esc_html((int)$r['sessions']).'</p>';echo '</section></div><p class="wpa-footnote">IP کامل در جدول رویدادها ذخیره نمی‌شود. شناسه‌های مرورگر در حالت پیش‌فرض فقط برای نشست فعلی هستند. این افزونه به‌تنهایی تضمین‌کنندهٔ انطباق قانونی نیست.</p></div>';
