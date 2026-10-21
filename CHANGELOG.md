@@ -1,3 +1,9 @@
+## 1.4.1
+
+- Deleting WP Analyz now removes its analytics tables, settings, database-backed transient caches, scheduled cleanup, and its WooCommerce analytics metadata from legacy and HPOS storage. Deactivation still preserves data.
+- Removed the opt-in `WPA_DELETE_DATA_ON_UNINSTALL` requirement; plugin deletion now performs cleanup by default.
+- Documented limits that WordPress cannot remotely erase browser-local storage, cookies on visitors' devices, host/server logs, backups, or cache-only entries held solely by an external object-cache backend.
+
 ## 1.4.0
 
 - Added custom date-range filters and previous-period comparisons for event, page-view, and purchase counts.
