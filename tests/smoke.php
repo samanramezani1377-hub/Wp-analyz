@@ -67,6 +67,10 @@ check(strpos($plugin, "'purchase','login'") === false, 'public event allowlist d
 check(strpos($plugin, "require_consent") !== false, 'advanced server-side purchase attribution respects the consent gate');
 check(strpos($plugin, 'baseline_allowed') !== false && strpos($plugin, "'mode'") !== false, 'server supports restricted aggregate mode without visitor/session IDs');
 check(strpos($plugin, "wpa_increment_aggregate('purchase'") !== false, 'unconsented WooCommerce purchases update daily aggregate counters');
+check(strpos($plugin, "empty(\$settings['enabled']) || empty(\$settings['woocommerce'])") !== false, 'WooCommerce purchase tracking respects the global enabled setting');
+check(strpos($plugin, "'date_created'=>'<'.\$cutoff_datetime") !== false && strpos($plugin, "'_wpa_session_id'") !== false, 'daily retention cleanup removes expired WooCommerce analytics context');
+check(strpos($plugin, "'billing_email'=>sanitize_email(\$email)") !== false, 'privacy exporter and eraser can locate guest orders by billing email');
+check(strpos($plugin, 'wpa_each_event_data_row') !== false && strpos($plugin, 'wpa_event_data_rows') === false, 'campaign, search, and performance reports iterate through all matching event rows in batches');
 check(strpos($plugin, 'wpa_increment_aggregate($name') !== false, 'baseline browser events update daily aggregate counters instead of event rows');
 check(strpos($plugin, 'strlen((string)$body)>8192') !== false, 'rejects oversized event payloads');
 check(strpos($plugin, 'wpa_csv_safe') !== false, 'CSV export has spreadsheet-formula mitigation');

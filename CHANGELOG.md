@@ -1,3 +1,10 @@
+## 1.2.1
+
+- Respect the global analytics-enabled switch in WooCommerce purchase recording.
+- Apply configured retention to WooCommerce analytics-consent and visitor/session metadata.
+- Include guest WooCommerce orders and linked purchase events in WordPress personal-data export/erasure by billing email.
+- Remove the 5,000-row report cap for campaign, search-term, and performance summaries by processing rows in bounded keyset batches.
+
 # Changelog
 
 ## 1.2.0 — 2026-10-18

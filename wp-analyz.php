@@ -2,7 +2,7 @@
 /**
  * Plugin Name: WP Analyz – Private Analytics
  * Description: Self-hosted privacy-first analytics for WordPress and WooCommerce. No Google tags or third-party analytics requests.
- * Version: 1.2.0
+ * Version: 1.2.1
  * Requires at least: 6.3
  * Requires PHP: 7.4
  * Author: WP Analyz
@@ -10,7 +10,7 @@
  * Text Domain: wp-analyz
  */
 defined('ABSPATH') || exit;
-define('WPA_VERSION','1.2.0');
+define('WPA_VERSION','1.2.1');
 define('WPA_TABLE','wpa_events');
 function wpa_table(){ global $wpdb; return $wpdb->prefix . WPA_TABLE; }
 function wpa_aggregate_table(){ global $wpdb; return $wpdb->prefix . 'wpa_aggregates'; }
@@ -71,7 +71,31 @@ function wpa_activate(){
 register_activation_hook(__FILE__,'wpa_activate');
 register_deactivation_hook(__FILE__,function(){wp_clear_scheduled_hook('wpa_daily_cleanup');});
 add_action('plugins_loaded',function(){ if(get_option('wpa_db_version')!=='3') wpa_activate(); });
-add_action('wpa_daily_cleanup',function(){ global $wpdb; $days=max(7,min(730,(int)wpa_settings()['retention_days'])); $cutoff=time()-DAY_IN_SECONDS*$days; $wpdb->query($wpdb->prepare('DELETE FROM '.wpa_table().' WHERE created_at < %s LIMIT 10000',gmdate('Y-m-d H:i:s',$cutoff))); $wpdb->query($wpdb->prepare('DELETE FROM '.wpa_aggregate_table().' WHERE day < %s LIMIT 10000',gmdate('Y-m-d',$cutoff))); });
+add_action('wpa_daily_cleanup',function(){
+ global $wpdb;
+ $days=max(7,min(730,(int)wpa_settings()['retention_days']));
+ $cutoff=time()-DAY_IN_SECONDS*$days;
+ $cutoff_datetime=gmdate('Y-m-d H:i:s',$cutoff);
+ $cutoff_day=gmdate('Y-m-d',$cutoff);
+ $wpdb->query($wpdb->prepare('DELETE FROM '.wpa_table().' WHERE created_at < %s LIMIT 10000',$cutoff_datetime));
+ $wpdb->query($wpdb->prepare('DELETE FROM '.wpa_aggregate_table().' WHERE day < %s LIMIT 10000',$cutoff_day));
+ // Clean WooCommerce analytics context through the Woo CRUD API so classic storage and HPOS are both supported.
+ if(function_exists('wc_get_orders')){
+  $orders=wc_get_orders(array(
+   'limit'=>100,'return'=>'objects','orderby'=>'date','order'=>'ASC',
+   'date_created'=>'<'.$cutoff_datetime,
+   'meta_query'=>array('relation'=>'OR',
+    array('key'=>'_wpa_analytics_consent','compare'=>'EXISTS'),
+    array('key'=>'_wpa_visitor_id','compare'=>'EXISTS'),
+    array('key'=>'_wpa_session_id','compare'=>'EXISTS')
+   )
+  ));
+  foreach((array)$orders as $order){
+   foreach(array('_wpa_analytics_consent','_wpa_visitor_id','_wpa_session_id') as $key)$order->delete_meta_data($key);
+   $order->save();
+  }
+ }
+});
 function wpa_uuid($v){$v=strtolower((string)$v);return preg_match('/^[a-f0-9]{8}-[a-f0-9]{4}-[1-8][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/',$v)?$v:false;}
 function wpa_stable_uuid($seed){$h=md5(wp_salt('auth').'|'.$seed);$h[12]='5';$h[16]=dechex((hexdec($h[16])&3)|8);return substr($h,0,8).'-'.substr($h,8,4).'-'.substr($h,12,4).'-'.substr($h,16,4).'-'.substr($h,20,12);}
 function wpa_clean_path($url){$url=esc_url_raw((string)$url,array('http','https'));$p=$url?wp_parse_url($url):false;$home=wp_parse_url(home_url('/'));if(empty($p['host'])||empty($home['host'])||strtolower($p['host'])!==strtolower($home['host']))return false;$path=isset($p['path'])?$p['path']:'/';$path=preg_replace('/[\x00-\x1F\x7F]/u','',rawurldecode($path));return substr(sanitize_text_field($path),0,512);}
@@ -127,7 +151,7 @@ add_action('woocommerce_checkout_create_order', 'wpa_capture_order_analytics_con
 add_action('woocommerce_store_api_checkout_order_processed', function($order) { wpa_capture_order_analytics_context($order, true); }, 20, 1);
 function wpa_record_purchase($order_id) {
  $settings = wpa_settings();
- if (empty($settings['woocommerce']) || !function_exists('wc_get_order')) return;
+ if (empty($settings['enabled']) || empty($settings['woocommerce']) || !function_exists('wc_get_order')) return;
  $order = wc_get_order($order_id);
  if (!$order || !$order->is_paid()) return;
  $consent_state = (string) $order->get_meta('_wpa_analytics_consent', true);
@@ -164,51 +188,61 @@ function wpa_record_purchase($order_id) {
 add_action('woocommerce_payment_complete','wpa_record_purchase',20,1);add_action('woocommerce_order_status_processing','wpa_record_purchase',20,1);add_action('woocommerce_order_status_completed','wpa_record_purchase',20,1);
 add_action('admin_menu',function(){add_menu_page('WP Analyz','WP Analyz','manage_options','wp-analyz','wpa_dashboard','dashicons-chart-area',58);add_submenu_page('wp-analyz','Settings','Settings','manage_options','wp-analyz-settings','wpa_settings_page');});
 add_action('admin_enqueue_scripts',function($hook){if(strpos((string)$hook,'wp-analyz')===false)return;wp_enqueue_style('wpa-admin',plugins_url('assets/css/admin.css',__FILE__),array(),WPA_VERSION);});
-function wpa_event_data_rows($since, $event_name, $limit = 5000) {
+function wpa_each_event_data_row($since, $event_name, $callback, $batch_size = 1000) {
  global $wpdb;
- $limit = max(1, min(10000, (int) $limit));
- return $wpdb->get_results($wpdb->prepare('SELECT event_data FROM '.wpa_table().' WHERE created_at >= %s AND event_name = %s AND event_data IS NOT NULL ORDER BY created_at DESC LIMIT '.$limit, $since, $event_name), ARRAY_A);
+ $batch_size = max(100, min(2000, (int) $batch_size));
+ $last_id = 0;
+ do {
+  $rows = $wpdb->get_results($wpdb->prepare(
+   'SELECT id,event_data FROM '.wpa_table().' WHERE id > %d AND created_at >= %s AND event_name = %s AND event_data IS NOT NULL ORDER BY id ASC LIMIT '.$batch_size,
+   $last_id, $since, $event_name
+  ), ARRAY_A);
+  foreach ((array) $rows as $row) {
+   $last_id = (int) $row['id'];
+   $callback($row);
+  }
+ } while (count((array) $rows) === $batch_size);
 }
 function wpa_campaign_report($since) {
  $counts = array();
- foreach (wpa_event_data_rows($since, 'page_view') as $row) {
+ wpa_each_event_data_row($since, 'page_view', function($row) use (&$counts) {
   $data = json_decode((string) $row['event_data'], true);
-  if (!is_array($data)) continue;
+  if (!is_array($data)) return;
   $source = isset($data['utm_source']) ? sanitize_text_field($data['utm_source']) : '';
   $medium = isset($data['utm_medium']) ? sanitize_text_field($data['utm_medium']) : '';
   $campaign = isset($data['utm_campaign']) ? sanitize_text_field($data['utm_campaign']) : '';
-  if ('' === $source && '' === $medium && '' === $campaign) continue;
+  if ('' === $source && '' === $medium && '' === $campaign) return;
   $label = implode(' / ', array_filter(array($source, $medium, $campaign), 'strlen'));
   if (!isset($counts[$label])) $counts[$label] = 0;
   $counts[$label]++;
- }
+ });
  arsort($counts);
  $rows = array(); foreach (array_slice($counts, 0, 10, true) as $label => $total) $rows[] = array('label' => $label, 'total' => $total);
  return $rows;
 }
 function wpa_search_report($since) {
  $counts = array();
- foreach (wpa_event_data_rows($since, 'search') as $row) {
+ wpa_each_event_data_row($since, 'search', function($row) use (&$counts) {
   $data = json_decode((string) $row['event_data'], true);
-  if (!is_array($data) || empty($data['term'])) continue;
+  if (!is_array($data) || empty($data['term'])) return;
   $term = trim(sanitize_text_field($data['term']));
-  if ('' === $term) continue;
+  if ('' === $term) return;
   if (!isset($counts[$term])) $counts[$term] = 0;
   $counts[$term]++;
- }
+ });
  arsort($counts);
  $rows = array(); foreach (array_slice($counts, 0, 10, true) as $label => $total) $rows[] = array('label' => $label, 'total' => $total);
  return $rows;
 }
 function wpa_performance_report($since) {
  $stats = array();
- foreach (wpa_event_data_rows($since, 'web_vital') as $row) {
+ wpa_each_event_data_row($since, 'web_vital', function($row) use (&$stats) {
   $data = json_decode((string) $row['event_data'], true);
-  if (!is_array($data) || empty($data['metric']) || !isset($data['metric_value']) || !is_numeric($data['metric_value'])) continue;
+  if (!is_array($data) || empty($data['metric']) || !isset($data['metric_value']) || !is_numeric($data['metric_value'])) return;
   $metric = sanitize_key($data['metric']);
   if (!isset($stats[$metric])) $stats[$metric] = array('sum' => 0, 'count' => 0);
   $stats[$metric]['sum'] += (float) $data['metric_value']; $stats[$metric]['count']++;
- }
+ });
  global $wpdb; $aggregate_since=substr((string)$since,0,10); $aggregate_metrics=$wpdb->get_results($wpdb->prepare('SELECT metric_name,SUM(metric_sum) metric_sum,SUM(metric_count) metric_count FROM '.wpa_aggregate_table().' WHERE day >= %s AND event_name = %s AND metric_name <> %s GROUP BY metric_name',$aggregate_since,'web_vital',''),ARRAY_A);foreach($aggregate_metrics as $row){$metric=sanitize_key($row['metric_name']);if(!isset($stats[$metric]))$stats[$metric]=array('sum'=>0,'count'=>0);$stats[$metric]['sum']+=(float)$row['metric_sum'];$stats[$metric]['count']+=(int)$row['metric_count'];}
  $rows = array(); foreach ($stats as $metric => $stat) $rows[] = array('label' => $metric . ' (میانگین)', 'total' => round($stat['sum'] / max(1, $stat['count']), 2));
  usort($rows, function($a, $b) { return strcmp($a['label'], $b['label']); });
@@ -232,10 +266,12 @@ add_filter('wp_privacy_personal_data_exporters', function($exporters) {
   'exporter_friendly_name' => 'WP Analyz Analytics',
   'callback' => function($email, $page = 1) {
    $user = get_user_by('email', $email);
-   if (!$user) return array('data' => array(), 'done' => true);
    global $wpdb;
    $page = max(1, (int) $page); $limit = 500; $offset = ($page - 1) * $limit;
-   $rows = $wpdb->get_results($wpdb->prepare('SELECT id,created_at,event_name,url_path,referrer_host,device_type FROM '.wpa_table().' WHERE user_id=%d ORDER BY created_at DESC LIMIT %d OFFSET %d', $user->ID, $limit, $offset), ARRAY_A);
+   $rows = array();
+   if ($user) {
+    $rows = $wpdb->get_results($wpdb->prepare('SELECT id,created_at,event_name,url_path,referrer_host,device_type FROM '.wpa_table().' WHERE user_id=%d AND event_name<>%s ORDER BY created_at DESC LIMIT %d OFFSET %d', $user->ID, 'purchase', $limit, $offset), ARRAY_A);
+   }
    $data = array();
    foreach ($rows as $row) {
     $data[] = array('group_id'=>'wp-analyz','group_label'=>'WP Analyz Analytics','item_id'=>'wpa-'.$row['id'],'data'=>array(
@@ -244,22 +280,33 @@ add_filter('wp_privacy_personal_data_exporters', function($exporters) {
      array('name'=>'Device','value'=>$row['device_type'])
     ));
    }
-   $events_done = count($rows) < $limit;
+   $events_done = !$user || count($rows) < $limit;
    $orders_done = true;
    if (function_exists('wc_get_orders')) {
-    $orders_page = wc_get_orders(array('customer_id'=>(int)$user->ID,'limit'=>$limit,'page'=>$page,'paginate'=>true,'return'=>'objects'));
+    // Billing-email lookup includes guest orders that have no WordPress customer account.
+    $orders_page = wc_get_orders(array('billing_email'=>sanitize_email($email),'limit'=>$limit,'page'=>$page,'paginate'=>true,'return'=>'objects'));
     $orders = is_object($orders_page) && isset($orders_page->orders) ? $orders_page->orders : array();
     $max_pages = is_object($orders_page) && isset($orders_page->max_num_pages) ? max(1,(int)$orders_page->max_num_pages) : 1;
     $orders_done = $page >= $max_pages;
     foreach ($orders as $order) {
      $consent = (string) $order->get_meta('_wpa_analytics_consent', true);
-     if ('' === $consent) continue;
-     $data[] = array('group_id'=>'wp-analyz','group_label'=>'WP Analyz Analytics','item_id'=>'wpa-order-'.$order->get_id(),'data'=>array(
-      array('name'=>'WooCommerce order ID','value'=>(string)$order->get_id()),
-      array('name'=>'Analytics consent state','value'=>$consent),
-      array('name'=>'Visitor ID','value'=>(string)$order->get_meta('_wpa_visitor_id', true)),
-      array('name'=>'Session ID','value'=>(string)$order->get_meta('_wpa_session_id', true))
-     ));
+     if ('' !== $consent) {
+      $data[] = array('group_id'=>'wp-analyz','group_label'=>'WP Analyz Analytics','item_id'=>'wpa-order-'.$order->get_id(),'data'=>array(
+       array('name'=>'WooCommerce order ID','value'=>(string)$order->get_id()),
+       array('name'=>'Analytics consent state','value'=>$consent),
+       array('name'=>'Visitor ID','value'=>(string)$order->get_meta('_wpa_visitor_id', true)),
+       array('name'=>'Session ID','value'=>(string)$order->get_meta('_wpa_session_id', true))
+      ));
+     }
+     // Guest purchase events have user_id=0; include them by their WooCommerce order ID.
+     $purchase_rows = $wpdb->get_results($wpdb->prepare('SELECT id,created_at,event_name,url_path,referrer_host,device_type FROM '.wpa_table().' WHERE object_id=%d AND event_name=%s ORDER BY created_at DESC', (int)$order->get_id(), 'purchase'), ARRAY_A);
+     foreach ((array)$purchase_rows as $row) {
+      $data[] = array('group_id'=>'wp-analyz','group_label'=>'WP Analyz Analytics','item_id'=>'wpa-'.$row['id'],'data'=>array(
+       array('name'=>'Date UTC','value'=>$row['created_at']), array('name'=>'Event','value'=>$row['event_name']),
+       array('name'=>'Page path','value'=>$row['url_path']), array('name'=>'Referrer host','value'=>$row['referrer_host']),
+       array('name'=>'Device','value'=>$row['device_type'])
+      ));
+     }
     }
    }
    return array('data'=>$data,'done'=>$events_done && $orders_done);
@@ -272,16 +319,21 @@ add_filter('wp_privacy_personal_data_erasers', function($erasers) {
   'eraser_friendly_name' => 'WP Analyz Analytics',
   'callback' => function($email, $page = 1) {
    $user = get_user_by('email', $email);
-   if (!$user) return array('items_removed'=>false,'items_retained'=>false,'messages'=>array(),'done'=>true);
    global $wpdb;
-   $removed = (bool) $wpdb->delete(wpa_table(), array('user_id'=>(int)$user->ID), array('%d'));
+   $removed = false;
+   if ($user) $removed = (bool) $wpdb->delete(wpa_table(), array('user_id'=>(int)$user->ID), array('%d'));
    $done = true;
    if (function_exists('wc_get_orders')) {
+    // Billing-email lookup includes guest orders with no WordPress user ID.
     $page = max(1, (int) $page); $limit = 100;
-    $orders_page = wc_get_orders(array('customer_id'=>(int)$user->ID,'limit'=>$limit,'page'=>$page,'paginate'=>true,'return'=>'objects'));
+    $orders_page = wc_get_orders(array('billing_email'=>sanitize_email($email),'limit'=>$limit,'page'=>$page,'paginate'=>true,'return'=>'objects'));
     $orders = is_object($orders_page) && isset($orders_page->orders) ? $orders_page->orders : array();
     $max_pages = is_object($orders_page) && isset($orders_page->max_num_pages) ? max(1,(int)$orders_page->max_num_pages) : 1;
     foreach ($orders as $order) {
+     // Remove linked purchase analytics even when the checkout was a guest order (user_id=0).
+     $order_id = (int) $order->get_id();
+     $deleted_purchase = $wpdb->delete(wpa_table(), array('object_id'=>$order_id,'event_name'=>'purchase'), array('%d','%s'));
+     if ($deleted_purchase) $removed = true;
      foreach (array('_wpa_analytics_consent','_wpa_visitor_id','_wpa_session_id') as $meta_key) {
       if ('' !== (string) $order->get_meta($meta_key, true)) { $order->delete_meta_data($meta_key); $removed = true; }
      }
