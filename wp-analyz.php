@@ -38,6 +38,7 @@ function wpa_activate(){
  PRIMARY KEY  (id),
  UNIQUE KEY event_id (event_id),
  KEY created_at (created_at),
+ KEY created_id (created_at,id),
  KEY event_name_created (event_name,created_at),
  KEY event_name_created_id (event_name,created_at,id),
  KEY visitor_created (visitor_id,created_at),
@@ -256,6 +257,7 @@ function wpa_each_event_data_row($since, $event_name, $callback, $batch_size = 1
  } while (count((array) $rows) === $batch_size);
 }
 function wpa_campaign_report($since, $until = null) {
+ $cache_key='wpa_campaign_'.md5($since.'|'.substr((string)$until,0,16));$cached=get_transient($cache_key);if(is_array($cached))return $cached;
  $counts = array();
  wpa_each_event_data_row($since, 'page_view', function($row) use (&$counts) {
   $data = json_decode((string) $row['event_data'], true);
@@ -270,9 +272,10 @@ function wpa_campaign_report($since, $until = null) {
  }, 1000, $until);
  arsort($counts);
  $rows = array(); foreach (array_slice($counts, 0, 10, true) as $label => $total) $rows[] = array('label' => $label, 'total' => $total);
- return $rows;
+ set_transient($cache_key,$rows,MINUTE_IN_SECONDS);return $rows;
 }
 function wpa_search_report($since, $until = null) {
+ $cache_key='wpa_search_'.md5($since.'|'.substr((string)$until,0,16));$cached=get_transient($cache_key);if(is_array($cached))return $cached;
  $counts = array();
  wpa_each_event_data_row($since, 'search', function($row) use (&$counts) {
   $data = json_decode((string) $row['event_data'], true);
@@ -284,9 +287,10 @@ function wpa_search_report($since, $until = null) {
  }, 1000, $until);
  arsort($counts);
  $rows = array(); foreach (array_slice($counts, 0, 10, true) as $label => $total) $rows[] = array('label' => $label, 'total' => $total);
- return $rows;
+ set_transient($cache_key,$rows,MINUTE_IN_SECONDS);return $rows;
 }
 function wpa_performance_report($since, $until = null, $aggregate_since = null, $aggregate_until = null) {
+ $cache_key='wpa_perf_'.md5($since.'|'.substr((string)$until,0,16).'|'.$aggregate_since.'|'.$aggregate_until);$cached=get_transient($cache_key);if(is_array($cached))return $cached;
  $stats = array();
  wpa_each_event_data_row($since, 'web_vital', function($row) use (&$stats) {
   $data = json_decode((string) $row['event_data'], true);
@@ -298,7 +302,7 @@ function wpa_performance_report($since, $until = null, $aggregate_since = null, 
  global $wpdb; $aggregate_since=$aggregate_since?:substr((string)$since,0,10); $aggregate_until=$aggregate_until?:gmdate('Y-m-d',time()+DAY_IN_SECONDS); $aggregate_metrics=$wpdb->get_results($wpdb->prepare('SELECT metric_name,SUM(metric_sum) metric_sum,SUM(metric_count) metric_count FROM '.wpa_aggregate_table().' WHERE day >= %s AND day < %s AND event_name = %s AND metric_name <> %s GROUP BY metric_name',$aggregate_since,$aggregate_until,'web_vital',''),ARRAY_A);foreach($aggregate_metrics as $row){$metric=sanitize_key($row['metric_name']);if(!isset($stats[$metric]))$stats[$metric]=array('sum'=>0,'count'=>0);$stats[$metric]['sum']+=(float)$row['metric_sum'];$stats[$metric]['count']+=(int)$row['metric_count'];}
  $rows = array(); foreach ($stats as $metric => $stat) $rows[] = array('label' => $metric . ' (میانگین)', 'total' => round($stat['sum'] / max(1, $stat['count']), 2));
  usort($rows, function($a, $b) { return strcmp($a['label'], $b['label']); });
- return $rows;
+ set_transient($cache_key,$rows,MINUTE_IN_SECONDS);return $rows;
 }
 function wpa_csv_safe($value) {
  $value = (string) $value;
@@ -306,29 +310,32 @@ function wpa_csv_safe($value) {
  return $value;
 }
 function wpa_currency_revenue_report($since,$until,$aggregate_since,$aggregate_until) {
+ $cache_key='wpa_revenue_'.md5($since.'|'.substr((string)$until,0,16).'|'.$aggregate_since.'|'.$aggregate_until);$cached=get_transient($cache_key);if(is_array($cached))return $cached;
  global $wpdb;$rows=array();
  $events=$wpdb->get_results($wpdb->prepare('SELECT currency,SUM(CASE WHEN event_name = %s THEN 1 ELSE 0 END) purchases,COALESCE(SUM(value_decimal),0) revenue FROM '.wpa_table().' WHERE created_at >= %s AND created_at < %s AND event_name IN (%s,%s) GROUP BY currency','purchase',$since,$until,'purchase','refund'),ARRAY_A);
  foreach((array)$events as $r){$c=$r['currency']!==''?$r['currency']:'نامشخص';if(!isset($rows[$c]))$rows[$c]=array('label'=>$c,'total'=>0,'purchases'=>0);$rows[$c]['total']+=(float)$r['revenue'];$rows[$c]['purchases']+=(int)$r['purchases'];}
  $agg=$wpdb->get_results($wpdb->prepare('SELECT currency,SUM(CASE WHEN event_name = %s THEN event_count ELSE 0 END) purchases,COALESCE(SUM(value_sum),0) revenue FROM '.wpa_aggregate_table().' WHERE day >= %s AND day < %s AND event_name IN (%s,%s) GROUP BY currency','purchase',$aggregate_since,$aggregate_until,'purchase','refund'),ARRAY_A);
  foreach((array)$agg as $r){$c=$r['currency']!==''?$r['currency']:'نامشخص';if(!isset($rows[$c]))$rows[$c]=array('label'=>$c,'total'=>0,'purchases'=>0);$rows[$c]['total']+=(float)$r['revenue'];$rows[$c]['purchases']+=(int)$r['purchases'];}
- usort($rows,function($a,$b){return strcmp($a['label'],$b['label']);});return $rows;
+ usort($rows,function($a,$b){return strcmp($a['label'],$b['label']);});set_transient($cache_key,$rows,MINUTE_IN_SECONDS);return $rows;
 }
 function wpa_product_activity_report($since,$until,$aggregate_since,$aggregate_until,$limit=10) {
+ $cache_key='wpa_products_'.md5($since.'|'.substr((string)$until,0,16).'|'.$aggregate_since.'|'.$aggregate_until.'|'.$limit);$cached=get_transient($cache_key);if(is_array($cached))return $cached;
  global $wpdb;$counts=array();
  $events=$wpdb->get_results($wpdb->prepare('SELECT object_id,event_name,COUNT(*) total FROM '.wpa_table().' WHERE created_at >= %s AND created_at < %s AND object_id > 0 AND event_name IN (%s,%s) GROUP BY object_id,event_name',$since,$until,'product_view','add_to_cart'),ARRAY_A);
  foreach((array)$events as $r){$id=(int)$r['object_id'];$k=$r['event_name']==='product_view'?'views':'carts';if(!isset($counts[$id]))$counts[$id]=array('views'=>0,'carts'=>0);$counts[$id][$k]+=(int)$r['total'];}
  $agg=$wpdb->get_results($wpdb->prepare('SELECT object_id,event_name,SUM(event_count) total FROM '.wpa_aggregate_table().' WHERE day >= %s AND day < %s AND object_id > 0 AND event_name IN (%s,%s) GROUP BY object_id,event_name',$aggregate_since,$aggregate_until,'product_view','add_to_cart'),ARRAY_A);
  foreach((array)$agg as $r){$id=(int)$r['object_id'];$k=$r['event_name']==='product_view'?'views':'carts';if(!isset($counts[$id]))$counts[$id]=array('views'=>0,'carts'=>0);$counts[$id][$k]+=(int)$r['total'];}
  uasort($counts,function($a,$b){return ($b['views']+$b['carts']*2)<=>($a['views']+$a['carts']*2);});$out=array();
- foreach(array_slice($counts,0,max(1,(int)$limit),true) as $id=>$c){$title=function_exists('get_the_title')?get_the_title((int)$id):'';$out[]=array('label'=>($title?$title:'محصول #'.(int)$id).' — بازدید: '.$c['views'].' / افزودن به سبد: '.$c['carts'],'total'=>(int)$c['views']);}return $out;
+ foreach(array_slice($counts,0,max(1,(int)$limit),true) as $id=>$c){$title=function_exists('get_the_title')?get_the_title((int)$id):'';$out[]=array('label'=>($title?$title:'محصول #'.(int)$id).' — بازدید: '.$c['views'].' / افزودن به سبد: '.$c['carts'],'total'=>(int)$c['views']);}set_transient($cache_key,$out,MINUTE_IN_SECONDS);return $out;
 }
 function wpa_funnel_event_counts($since,$until,$aggregate_since,$aggregate_until) {
+ $cache_key='wpa_funnel_'.md5($since.'|'.substr((string)$until,0,16).'|'.$aggregate_since.'|'.$aggregate_until);$cached=get_transient($cache_key);if(is_array($cached))return $cached;
  global $wpdb;$names=array('product_view'=>'بازدید محصول','add_to_cart'=>'افزودن به سبد','begin_checkout'=>'شروع پرداخت','purchase'=>'خرید');$counts=array_fill_keys(array_keys($names),0);
  $events=$wpdb->get_results($wpdb->prepare('SELECT event_name,COUNT(*) total FROM '.wpa_table().' WHERE created_at >= %s AND created_at < %s AND event_name IN (%s,%s,%s,%s) GROUP BY event_name',$since,$until,'product_view','add_to_cart','begin_checkout','purchase'),ARRAY_A);
  foreach((array)$events as $r)$counts[$r['event_name']]+=(int)$r['total'];
  $agg=$wpdb->get_results($wpdb->prepare('SELECT event_name,SUM(event_count) total FROM '.wpa_aggregate_table().' WHERE day >= %s AND day < %s AND event_name IN (%s,%s,%s,%s) GROUP BY event_name',$aggregate_since,$aggregate_until,'product_view','add_to_cart','begin_checkout','purchase'),ARRAY_A);
  foreach((array)$agg as $r)$counts[$r['event_name']]+=(int)$r['total'];
- $out=array();foreach($names as $k=>$label)$out[]=array('label'=>$label,'total'=>$counts[$k]);return $out;
+ $out=array();foreach($names as $k=>$label)$out[]=array('label'=>$label,'total'=>$counts[$k]);set_transient($cache_key,$out,MINUTE_IN_SECONDS);return $out;
 }
 function wpa_period_summary($since,$until,$aggregate_since,$aggregate_until) {
  global $wpdb;$t=wpa_table();$events=$wpdb->get_row($wpdb->prepare("SELECT COUNT(*) events,SUM(event_name='page_view') pageviews,SUM(event_name='purchase') purchases FROM {$t} WHERE created_at >= %s AND created_at < %s",$since,$until),ARRAY_A);
