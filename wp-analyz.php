@@ -2,7 +2,7 @@
 /**
  * Plugin Name: WP Analyz – Private Analytics
  * Description: Self-hosted privacy-first analytics for WordPress and WooCommerce. No Google tags or third-party analytics requests.
- * Version: 1.4.1
+ * Version: 1.4.2
  * Requires at least: 6.3
  * Requires PHP: 7.4
  * Author: WP Analyz
@@ -10,11 +10,11 @@
  * Text Domain: wp-analyz
  */
 defined('ABSPATH') || exit;
-define('WPA_VERSION','1.4.1');
+define('WPA_VERSION','1.4.2');
 define('WPA_TABLE','wpa_events');
 function wpa_table(){ global $wpdb; return $wpdb->prefix . WPA_TABLE; }
 function wpa_aggregate_table(){ global $wpdb; return $wpdb->prefix . 'wpa_aggregates'; }
-function wpa_defaults(){ return array('enabled'=>1,'exclude_admins'=>1,'require_consent'=>1,'baseline_analytics'=>1,'persistent_visitor'=>0,'woocommerce'=>1,'retention_days'=>90,'per_minute_limit'=>60); }
+function wpa_defaults(){ return array('enabled'=>1,'exclude_admins'=>1,'require_consent'=>0,'baseline_analytics'=>1,'persistent_visitor'=>0,'woocommerce'=>1,'retention_days'=>90,'per_minute_limit'=>60); }
 function wpa_settings(){ return wp_parse_args(get_option('wpa_settings',array()),wpa_defaults()); }
 function wpa_activate(){
  global $wpdb; require_once ABSPATH.'wp-admin/includes/upgrade.php'; $table=wpa_table(); $charset=$wpdb->get_charset_collate();
