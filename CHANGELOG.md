@@ -1,3 +1,7 @@
+## 1.4.2
+
+- Default configuration now starts in aggregate-only mode: consent-required advanced analytics is off unless an administrator explicitly enables it in settings. Existing saved administrator preferences are preserved.
+
 ## 1.4.1
 
 - Deleting WP Analyz now removes its analytics tables, settings, database-backed transient caches, scheduled cleanup, and its WooCommerce analytics metadata from legacy and HPOS storage. Deactivation still preserves data.
